@@ -1,0 +1,30 @@
+{
+  "name": "@kobuddy/db",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./schema": {
+      "types": "./dist/schema.d.ts",
+      "import": "./dist/schema.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "dev": "tsc -p tsconfig.build.json --watch",
+    "test": "echo ok"
+  },
+  "dependencies": {
+    "drizzle-orm": "0.45.2",
+    "drizzle-zod": "0.8.3",
+    "zod": "4.3.6"
+  },
+  "devDependencies": {
+    "drizzle-kit": "0.31.8",
+    "typescript": "5.9.3"
+  }
+}

@@ -1,0 +1,21 @@
+name: kobuddy
+services:
+  kobuddy:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      HOSTNAME: 0.0.0.0
+      PORT: "3000"
+      DATA_PATH: /app/data
+      DATABASE_FILE: app.sqlite
+      MIGRATIONS_PATH: /app/packages/db/migrations
+      INGEST_TOKEN: ${INGEST_TOKEN:?set INGEST_TOKEN in .env}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?set ADMIN_PASSWORD in .env}
+      SESSION_SECRET: ${SESSION_SECRET:?set SESSION_SECRET in .env}
+      PUBLIC_READ: "true"
+      REQUIRED_PLUGIN_VERSION: "0.1.0"
+      NODE_ENV: production
+    volumes:
+      - ./data:/app/data

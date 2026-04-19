@@ -1,0 +1,10 @@
+node_modules
+dist
+.turbo
+*.tsbuildinfo
+*.sqlite
+*.sqlite3
+.DS_Store
+.env
+.env.local
+coverage

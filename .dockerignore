@@ -1,0 +1,10 @@
+node_modules
+dist
+.turbo
+.git
+data
+.env
+.env.*
+!.env.example
+**/*.sqlite
+**/*.sqlite3

@@ -1,0 +1,43 @@
+{
+  "name": "@kobuddy/server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@hono/node-server": "1.19.7",
+    "@hono/zod-validator": "0.7.6",
+    "@kobuddy/common": "workspace:*",
+    "@kobuddy/db": "workspace:*",
+    "@scalar/hono-api-reference": "0.10.9",
+    "archiver": "7.0.1",
+    "bcryptjs": "3.0.3",
+    "better-sqlite3": "12.6.0",
+    "date-fns": "4.1.0",
+    "dotenv": "17.2.3",
+    "drizzle-orm": "0.45.2",
+    "hono": "4.12.14",
+    "hono-pino": "0.10.3",
+    "hono-rate-limiter": "0.5.3",
+    "iron-session": "8.0.4",
+    "pino": "10.2.0",
+    "ramda": "0.31.1",
+    "zod": "4.3.6"
+  },
+  "devDependencies": {
+    "@types/archiver": "7.0.0",
+    "@types/bcryptjs": "3.0.0",
+    "@types/better-sqlite3": "7.6.13",
+    "@types/node": "22.19.7",
+    "@types/ramda": "0.31.1",
+    "pino-pretty": "13.1.3",
+    "tsx": "4.21.0",
+    "typescript": "5.9.3",
+    "vitest": "4.0.16"
+  }
+}
