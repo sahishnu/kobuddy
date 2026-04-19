@@ -28,6 +28,8 @@ cp .env.example .env
 pnpm dev
 ```
 
+Keep `.env` at the **repository root** (next to `package.json`). The server resolves it even when Turbo runs it with cwd `apps/server`.
+
 - API + static UI: `http://127.0.0.1:3000` (Vite proxies `/api` when you run `pnpm --filter @kobuddy/web dev` separately, or use the server alone after `pnpm build`).
 - Generate DB migrations after schema edits: `pnpm db:generate` (from repo root).
 

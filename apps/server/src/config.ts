@@ -1,7 +1,36 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { config as loadEnv } from 'dotenv';
 import { z } from 'zod';
 
-loadEnv();
+/**
+ * Turbo runs `apps/server` with cwd `apps/server`, while `.env` usually lives at the
+ * monorepo root. Walk parents from cwd, then fall back to repo root next to this package.
+ */
+function resolveEnvPath(): string | undefined {
+  let dir = process.cwd();
+  for (let i = 0; i < 12; i++) {
+    const p = path.join(dir, '.env');
+    if (fs.existsSync(p)) return p;
+    const parent = path.dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+
+  const here = path.dirname(fileURLToPath(import.meta.url));
+  const fromMonorepoRoot = path.resolve(here, '../../../.env');
+  if (fs.existsSync(fromMonorepoRoot)) return fromMonorepoRoot;
+
+  return undefined;
+}
+
+const envFile = resolveEnvPath();
+if (envFile) {
+  loadEnv({ path: envFile });
+} else {
+  loadEnv();
+}
 
 const envSchema = z.object({
   NODE_ENV: z
@@ -28,6 +57,15 @@ function readEnv(): AppConfig {
   const parsed = envSchema.safeParse(process.env);
   if (!parsed.success) {
     console.error(parsed.error.flatten().fieldErrors);
+    if (
+      !process.env.INGEST_TOKEN &&
+      !process.env.ADMIN_PASSWORD &&
+      !process.env.SESSION_SECRET
+    ) {
+      console.error(
+        'Missing secrets. Copy `.env.example` to `.env` at the repository root and set INGEST_TOKEN, ADMIN_PASSWORD, and SESSION_SECRET.',
+      );
+    }
     throw new Error('Invalid environment configuration');
   }
   return parsed.data;
