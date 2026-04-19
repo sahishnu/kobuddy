@@ -15,6 +15,10 @@ docker compose up --build -d
 
 3. Open `http://localhost:3000` for the dashboard, `http://localhost:3000/api/docs` for API docs, and download the plugin from `http://localhost:3000/plugin.zip`.
 
+## Prerequisites
+
+Use **Node.js 24** (current Active LTS). The repo pins this in [`.nvmrc`](.nvmrc); with [nvm](https://github.com/nvm-sh/nvm) run `nvm install` from the project root.
+
 ## Local development
 
 ```bash
