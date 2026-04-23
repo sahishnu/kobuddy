@@ -30,6 +30,48 @@ local function is_https_url(url)
   return type(url) == "string" and url:lower():match("^https://") ~= nil
 end
 
+local function host_from_url(url)
+  if type(url) ~= "string" then
+    return nil
+  end
+  return url:match("^https?://([^/:?#]+)")
+end
+
+-- Ensure the underlying TCP socket is IPv4. On many KOReader devices the
+-- Wi-Fi has no IPv6 route; LuaSocket's default `socket.tcp()` may create a
+-- dual-stack or IPv6 socket and then fail connect() with ENETUNREACH. We
+-- temporarily alias `socket.tcp` to `socket.tcp4` for the duration of a single
+-- request (LuaSec uses `socket.tcp()` internally, so this forces IPv4 for
+-- HTTPS too). KOReader's plugin dispatch is synchronous, so this monkey-patch
+-- is safe as long as we always restore it.
+local function with_ipv4(fn)
+  if not socket.tcp4 then
+    return fn()
+  end
+  local saved = socket.tcp
+  socket.tcp = socket.tcp4
+  local ok, a, b, c = pcall(fn)
+  socket.tcp = saved
+  if not ok then
+    error(a)
+  end
+  return a, b, c
+end
+
+local function resolve_ipv4(host)
+  if type(host) ~= "string" or host == "" then
+    return nil, "no host in URL"
+  end
+  if not socket.dns or not socket.dns.toip then
+    return nil, "dns resolver unavailable"
+  end
+  local ip, err = socket.dns.toip(host)
+  if not ip then
+    return nil, tostring(err or "unknown dns error")
+  end
+  return ip
+end
+
 local function response_not_valid(content)
   logger.err("[kobuddy] callApi: response was not valid JSON", content)
   UIManager:show(InfoMessage:new({
@@ -94,7 +136,27 @@ return function(method, url, headers, body, filepath, quiet)
     request.protocol = "any"
   end
 
-  local code, resp_headers, status = socket.skip(1, client.request(request))
+  -- DNS preflight: resolve the host to an IPv4 address up front so a
+  -- resolution failure surfaces clearly instead of hiding behind a generic
+  -- ENETUNREACH from connect().
+  local host = host_from_url(request.url)
+  local resolved_ip, dns_err = resolve_ipv4(host)
+  if not resolved_ip then
+    socketutil:reset_timeout()
+    local reason = "DNS failure for " .. tostring(host) .. ": " .. tostring(dns_err)
+    logger.err("[kobuddy] callApi:", reason)
+    if not quiet then
+      UIManager:show(InfoMessage:new({
+        text = _(reason),
+      }))
+    end
+    return false, "dns_error", reason
+  end
+  logger.info("[kobuddy] callApi: resolved", host, "->", resolved_ip)
+
+  local code, resp_headers, status = with_ipv4(function()
+    return socket.skip(1, client.request(request))
+  end)
   socketutil:reset_timeout()
 
   -- Raise error if the socket / TLS layer failed before getting a response.
