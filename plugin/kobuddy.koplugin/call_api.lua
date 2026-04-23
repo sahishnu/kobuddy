@@ -26,6 +26,10 @@ local function pick_http_client(url)
   return http
 end
 
+local function is_https_url(url)
+  return type(url) == "string" and url:lower():match("^https://") ~= nil
+end
+
 local function response_not_valid(content)
   logger.err("[kobuddy] callApi: response was not valid JSON", content)
   UIManager:show(InfoMessage:new({
@@ -80,13 +84,31 @@ return function(method, url, headers, body, filepath, quiet)
     return false, "https_unsupported"
   end
 
+  -- LuaSec in KOReader sometimes ships without a usable CA bundle, which makes
+  -- TLS handshakes fail against perfectly valid endpoints (Railway, Fly, etc.).
+  -- For a self-hosted stats server this security tradeoff is acceptable: the
+  -- data is already scoped to an opaque bearer token, and the user controls
+  -- both ends. Connections are still encrypted; only cert validation is off.
+  if is_https_url(request.url) then
+    request.verify = "none"
+    request.protocol = "any"
+  end
+
   local code, resp_headers, status = socket.skip(1, client.request(request))
   socketutil:reset_timeout()
 
-  -- Raise error if network is unavailable
+  -- Raise error if the socket / TLS layer failed before getting a response.
+  -- LuaSocket surfaces the reason in `code` (e.g. "wrong version number",
+  -- "certificate verify failed", "connection refused", "timeout").
   if resp_headers == nil then
-    logger.err("[kobuddy] callApi: network error", status or code)
-    return false, "network_error"
+    local reason = tostring(status or code or "unknown error")
+    logger.err("[kobuddy] callApi: network error", reason, request.url)
+    if not quiet then
+      UIManager:show(InfoMessage:new({
+        text = _("Network error: " .. reason),
+      }))
+    end
+    return false, "network_error", reason
   end
 
   -- If the request returned successfully (any 2xx)

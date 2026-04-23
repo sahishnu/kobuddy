@@ -24,13 +24,22 @@ end
 
 local function render_response_message(response, prefix, default_text)
   local text = prefix .. " " .. default_text
-  if response ~= nil and response["message"] ~= nil then
-    logger.dbg("[kobuddy] API message received: ", JSON.encode(response))
-    text = prefix .. " " .. response["message"]
+
+  -- callApi may return a decoded JSON table (success / structured error) or a
+  -- plain string sentinel ("network_error", "https_unsupported", etc.). Handle
+  -- both so real failure reasons show up in the toast instead of a generic
+  -- fallback that hides what actually went wrong.
+  if type(response) == "table" then
+    if response["error"] ~= nil then
+      text = prefix .. " " .. tostring(response["error"])
+    elseif response["message"] ~= nil then
+      logger.dbg("[kobuddy] API message received: ", JSON.encode(response))
+      text = prefix .. " " .. tostring(response["message"])
+    end
+  elseif type(response) == "string" and response ~= "" then
+    text = prefix .. " " .. default_text .. " (" .. response .. ")"
   end
-  if response ~= nil and response["error"] ~= nil then
-    text = prefix .. " " .. tostring(response["error"])
-  end
+
   UIManager:show(InfoMessage:new({
     text = _(text),
   }))
@@ -38,18 +47,34 @@ end
 
 function KobuddyUpload.send_device_data(server_url, token, silent)
   local url = server_url .. API_DEVICE_LOCATION
+  local device_id = G_reader_settings:readSetting("device_id")
+  if device_id == nil or device_id == "" then
+    -- KOReader usually sets this on first launch, but fall back to a stable
+    -- placeholder so the server's `min(1)` validator doesn't reject us and we
+    -- can still sync stats while the user figures out their device settings.
+    device_id = "unknown-" .. tostring(Device.model or "koreader")
+    logger.warn("[kobuddy] device_id missing, using fallback:", device_id)
+  end
+
   local body = {
-    id = G_reader_settings:readSetting("device_id"),
+    id = device_id,
     model = Device.model,
     version = const.VERSION,
   }
   body = JSON.encode(body)
 
+  logger.info(
+    "[kobuddy] registering device",
+    url,
+    "model=" .. tostring(Device.model),
+    "version=" .. tostring(const.VERSION)
+  )
   local ok, response = callApi("POST", url, get_headers(body, token), body)
 
   if ok ~= true and not silent then
     render_response_message(response, "Error:", "Unable to register device.")
   end
+  return ok, response
 end
 
 function KobuddyUpload.send_statistics_data(server_url, token, silent)
