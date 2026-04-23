@@ -12,6 +12,8 @@ export type StatRow = {
   duration: number;
   totalPages: number;
   bookMd5: string;
+  page?: number;
+  deviceId?: string;
 };
 
 export type BookRow = {
@@ -31,6 +33,34 @@ function getPagesPerDay(stats: StatRow[]): number[] {
   return Object.values(statsPerDay).map(
     (dayStats) => dayStats?.reduce((acc) => acc + 1, 0) ?? 0,
   );
+}
+
+/**
+ * Counts unique author names across books by splitting combined author strings
+ * (commas, semicolons, ampersands, and the word "and").
+ */
+export function countUniqueAuthorTokens(
+  authorValues: (string | null | undefined)[],
+): number {
+  const set = new Set<string>();
+  for (const raw of authorValues) {
+    if (raw == null || !String(raw).trim()) continue;
+    const s = String(raw).trim();
+    const segments = s
+      .split(/(?:\s*,\s*|\s*;\s*|\s*&\s*|\s+and\s+)/i)
+      .map((x) => x.trim())
+      .filter((x) => x.length > 0);
+    if (segments.length === 0) continue;
+    if (segments.length === 1) {
+      const one = segments[0];
+      if (one) set.add(one.toLowerCase());
+    } else {
+      for (const seg of segments) {
+        set.add(seg.toLowerCase());
+      }
+    }
+  }
+  return set.size;
 }
 
 export const statsService = {

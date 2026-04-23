@@ -1,3 +1,4 @@
+import type { StatsOverview } from '@kobuddy/common';
 import { book, bookDevice, pageStat } from '@kobuddy/db/schema';
 import { eq, sql } from 'drizzle-orm';
 import { Hono } from 'hono';
@@ -6,7 +7,26 @@ import type { AppConfig } from '../config.js';
 import type { DbClient } from '../lib/db.js';
 import { requirePublicReadOrAdmin } from '../middleware/require-public-or-admin.js';
 import type { SessionData } from '../middleware/session.js';
-import { statsService } from '../stats/stats-service.js';
+import {
+  loadBookDeviceAggregates,
+  pickCurrentReadingBookMd5,
+} from '../stats/book-device-aggregates.js';
+import {
+  booksFinishedInLocalYear,
+  calendarByDayInZone,
+  hourlyReadingProfile,
+  streaksFromCalendarDays,
+  pagesReadThisIsoWeek as sumPagesReadThisIsoWeek,
+} from '../stats/stats-dashboard.js';
+import {
+  countUniqueAuthorTokens,
+  statsService,
+} from '../stats/stats-service.js';
+import { isValidIanaTimeZone } from '../stats/stats-tz.js';
+
+function displayTitle(b: { customTitle: string | null; title: string | null }) {
+  return b.customTitle || b.title || '(untitled)';
+}
 
 export function statsRouter(cfg: AppConfig, db: DbClient) {
   const r = new Hono<{
@@ -20,6 +40,8 @@ export function statsRouter(cfg: AppConfig, db: DbClient) {
         duration: pageStat.duration,
         totalPages: pageStat.totalPages,
         bookMd5: pageStat.bookMd5,
+        page: pageStat.page,
+        deviceId: pageStat.deviceId,
       })
       .from(pageStat)
       .innerJoin(book, eq(book.md5, pageStat.bookMd5))
@@ -40,18 +62,97 @@ export function statsRouter(cfg: AppConfig, db: DbClient) {
     return rows.reduce((acc, row) => acc + (row.mx ?? 0), 0);
   }
 
+  async function visibleBookAuthorTotals(): Promise<{
+    totalBooks: number;
+    totalAuthors: number;
+  }> {
+    const rows = await db
+      .select({ authors: book.authors })
+      .from(book)
+      .where(eq(book.hidden, false));
+    return {
+      totalBooks: rows.length,
+      totalAuthors: countUniqueAuthorTokens(rows.map((x) => x.authors)),
+    };
+  }
+
+  async function loadCurrentReadingBook() {
+    const rows = await loadBookDeviceAggregates(db);
+    const topMd5 = pickCurrentReadingBookMd5(rows);
+    if (!topMd5) return null;
+    const top = rows.find((r) => r.bookMd5 === topMd5);
+    if (!top) return null;
+
+    const [b] = await db
+      .select()
+      .from(book)
+      .where(eq(book.md5, topMd5))
+      .limit(1);
+    if (!b) return null;
+
+    const authors = b.authors?.trim() || null;
+    return {
+      md5: b.md5,
+      displayTitle: displayTitle(b),
+      authors,
+      coverUrl: b.coverPath ? `/api/books/${b.md5}/cover` : null,
+      pages: top.maxPages ?? 0,
+      totalReadPages: top.maxRead ?? 0,
+      lastOpen: top.maxLastOpen > 0 ? top.maxLastOpen : null,
+    };
+  }
+
   r.get('/', requirePublicReadOrAdmin(cfg), async (c) => {
+    const rawTz = c.req.query('timeZone') ?? c.req.query('tz');
+    const timeZone = rawTz && isValidIanaTimeZone(rawTz) ? rawTz : 'UTC';
+
     const stats = await loadVisibleStats();
     const totalPages = await totalPagesRead();
-    const overview = {
+    const { totalBooks, totalAuthors } = await visibleBookAuthorTotals();
+    const nowMs = Date.now();
+    const calendar = calendarByDayInZone(stats, timeZone);
+    const streaks = streaksFromCalendarDays(calendar, nowMs, timeZone);
+    const hourly = hourlyReadingProfile(stats, timeZone);
+    const year = new Intl.DateTimeFormat('en-US', {
+      timeZone,
+      year: 'numeric',
+    }).format(new Date(nowMs));
+    const booksFinishedThisLocalYear = booksFinishedInLocalYear(
+      stats,
+      Number.parseInt(year, 10),
+      timeZone,
+    );
+    const pagesReadThisIsoWeek = sumPagesReadThisIsoWeek(
+      stats,
+      nowMs,
+      timeZone,
+    );
+    const currentBook = await loadCurrentReadingBook();
+
+    const overview: StatsOverview = {
       totalReadingTimeSeconds: statsService.totalReadingTime(stats),
       totalPagesRead: totalPages,
+      totalBooks,
+      totalAuthors,
       perMonth: statsService.getPerMonthReadingTime(stats),
       perDayOfTheWeek: statsService.perDayOfTheWeek(stats),
       mostPagesInADay: statsService.mostPagesInADay(stats),
       longestDaySeconds: statsService.longestDay(stats),
       last7DaysReadTimeSeconds: statsService.last7DaysReadTime(stats),
-      calendar: statsService.calendarByDay(stats),
+      calendar,
+      statsTimeZone: timeZone,
+      readingGoalBooksPerYear: cfg.READING_GOAL_BOOKS ?? null,
+      booksFinishedThisLocalYear,
+      pagesReadThisIsoWeek,
+      currentStreakDays: streaks.currentStreakDays,
+      longestStreakDays: streaks.longestStreakDays,
+      hourlyReading: {
+        averageMinutesByHour: hourly.averageMinutesByHour,
+        peakHour: hourly.peakHour,
+        personaLabel: hourly.personaLabel,
+        personaDetail: hourly.personaDetail,
+      },
+      currentBook,
     };
     return c.json(overview);
   });

@@ -49,6 +49,11 @@ const envSchema = z.object({
   AUTO_FETCH_COVERS: z.coerce.boolean().default(false),
   GOOGLE_BOOKS_API_KEY: z.string().optional(),
   REQUIRED_PLUGIN_VERSION: z.string().default('0.1.0'),
+  /** Optional annual reading goal (number of books) for dashboard display. */
+  READING_GOAL_BOOKS: z.preprocess(
+    (v) => (v == null || v === '' ? undefined : Number(v)),
+    z.number().int().positive().optional(),
+  ),
 });
 
 export type AppConfig = z.infer<typeof envSchema>;

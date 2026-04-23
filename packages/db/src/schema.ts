@@ -9,6 +9,7 @@ import {
 } from 'drizzle-orm/sqlite-core';
 import { createInsertSchema, createUpdateSchema } from 'drizzle-zod';
 
+/** Reading app / hardware identity; stats and book rollups are scoped by `id` from ingest. */
 export const device = sqliteTable('device', {
   id: text('id').primaryKey(),
   model: text('model'),
@@ -17,6 +18,7 @@ export const device = sqliteTable('device', {
     .$defaultFn(() => new Date()),
 });
 
+/** One book per KOReader-style document fingerprint (`md5`). */
 export const book = sqliteTable(
   'book',
   {
@@ -37,6 +39,7 @@ export const book = sqliteTable(
   (t) => [index('book_hidden_idx').on(t.hidden)],
 );
 
+/** Per-device summary for a book (progress, counts, KOReader aggregates). PK = book + device. */
 export const bookDevice = sqliteTable(
   'book_device',
   {
@@ -47,6 +50,7 @@ export const bookDevice = sqliteTable(
       .notNull()
       .references(() => device.id, { onDelete: 'cascade' }),
     lastOpen: integer('last_open'),
+    /** Document length in pages as last reported for this device. */
     pages: integer('pages'),
     notes: integer('notes'),
     highlights: integer('highlights'),
@@ -56,6 +60,10 @@ export const bookDevice = sqliteTable(
   (t) => [primaryKey({ columns: [t.bookMd5, t.deviceId] })],
 );
 
+/**
+ * Granular reading rows mirrored from KOReader `page_stat_data` (statistics.sqlite3).
+ * Uniqueness: same device + book + page + session start ⇒ one row (re-ingest updates duration/total_pages).
+ */
 export const pageStat = sqliteTable(
   'page_stat',
   {
@@ -66,10 +74,13 @@ export const pageStat = sqliteTable(
     deviceId: text('device_id')
       .notNull()
       .references(() => device.id, { onDelete: 'cascade' }),
+    /** Page index in KOReader page model for this segment (where you were in the book, not a running total). */
     page: integer('page').notNull(),
-    /** Unix timestamp in seconds (KOReader payload). */
+    /** Session start, unix seconds (KOReader). */
     startTime: integer('start_time').notNull(),
+    /** Time spent in this segment; units match KOReader ingest. */
     duration: integer('duration').notNull(),
+    /** Document page count when this row was written (can differ later if layout/font changes). */
     totalPages: integer('total_pages').notNull(),
   },
   (t) => [

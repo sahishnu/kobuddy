@@ -5,7 +5,8 @@ import type { DbClient } from '../lib/db.js';
 
 const UNKNOWN_DEVICE_ID = 'unknown-device';
 
-export async function ingestReadingData(
+/** better-sqlite3 transactions must be synchronous — async callbacks throw. */
+export function ingestReadingData(
   db: DbClient,
   booksToImport: KoreaderBook[],
   newPageStats: PageStatPayload[],
@@ -23,22 +24,21 @@ export async function ingestReadingData(
   const firstDevice = safePageStats.find((s) => s.device_id)?.device_id;
   const deviceId = firstDevice ?? UNKNOWN_DEVICE_ID;
 
-  await db.transaction(async (tx) => {
+  db.transaction((tx) => {
     if (deviceId === UNKNOWN_DEVICE_ID) {
-      await tx
-        .insert(device)
+      tx.insert(device)
         .values({ id: UNKNOWN_DEVICE_ID, model: 'Manual / unknown' })
-        .onConflictDoNothing({ target: device.id });
+        .onConflictDoNothing({ target: device.id })
+        .run();
     } else {
-      await tx
-        .insert(device)
+      tx.insert(device)
         .values({ id: deviceId, model: 'KOReader' })
-        .onConflictDoNothing({ target: device.id });
+        .onConflictDoNothing({ target: device.id })
+        .run();
     }
 
     for (const b of booksToImport) {
-      await tx
-        .insert(book)
+      tx.insert(book)
         .values({
           md5: b.md5,
           title: b.title || null,
@@ -46,12 +46,12 @@ export async function ingestReadingData(
           series: b.series || null,
           language: b.language || null,
         })
-        .onConflictDoNothing({ target: book.md5 });
+        .onConflictDoNothing({ target: book.md5 })
+        .run();
     }
 
     for (const b of booksToImport) {
-      await tx
-        .insert(bookDevice)
+      tx.insert(bookDevice)
         .values({
           bookMd5: b.md5,
           deviceId,
@@ -72,7 +72,8 @@ export async function ingestReadingData(
             totalReadTime: sql`CASE WHEN excluded.total_read_time > 0 THEN excluded.total_read_time ELSE book_device.total_read_time END`,
             totalReadPages: sql`CASE WHEN excluded.total_read_pages > 0 THEN excluded.total_read_pages ELSE book_device.total_read_pages END`,
           },
-        });
+        })
+        .run();
     }
 
     if (safePageStats.length > 0) {
@@ -85,8 +86,7 @@ export async function ingestReadingData(
         totalPages: s.total_pages,
       }));
 
-      await tx
-        .insert(pageStat)
+      tx.insert(pageStat)
         .values(rows)
         .onConflictDoUpdate({
           target: [
@@ -99,7 +99,8 @@ export async function ingestReadingData(
             duration: sql`excluded.duration`,
             totalPages: sql`excluded.total_pages`,
           },
-        });
+        })
+        .run();
     }
   });
 }

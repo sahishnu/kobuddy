@@ -1,11 +1,12 @@
-import '@mantine/core/styles.css';
-import '@mantine/notifications/styles.css';
-import { MantineProvider } from '@mantine/core';
-import { Notifications } from '@mantine/notifications';
+import './index.css';
+import 'sonner/dist/styles.css';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { RouterProvider } from '@tanstack/react-router';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
+import { AppToaster } from '@/components/AppToaster';
+import { TooltipProvider } from '@/components/ui/tooltip';
+import { ThemeProvider } from '@/theme/theme-provider';
 import { router } from './router';
 
 const queryClient = new QueryClient({
@@ -18,11 +19,13 @@ if (!rootEl) {
 }
 createRoot(rootEl).render(
   <StrictMode>
-    <QueryClientProvider client={queryClient}>
-      <MantineProvider defaultColorScheme="dark">
-        <Notifications position="top-right" />
-        <RouterProvider router={router} />
-      </MantineProvider>
-    </QueryClientProvider>
+    <ThemeProvider>
+      <QueryClientProvider client={queryClient}>
+        <TooltipProvider delay={400} closeDelay={0}>
+          <RouterProvider router={router} />
+          <AppToaster />
+        </TooltipProvider>
+      </QueryClientProvider>
+    </ThemeProvider>
   </StrictMode>,
 );

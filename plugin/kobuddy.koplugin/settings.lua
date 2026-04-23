@@ -13,6 +13,12 @@ local KobuddySettings = {
 KobuddySettings.__index = KobuddySettings
 
 local SETTING_KEY = "kobuddy"
+
+-- Personal builds: paste the same value as server `INGEST_TOKEN` here to skip
+-- entering it in KOReader. Leave "" for normal saved settings. Do not commit
+-- a real token to a shared repository.
+local HARDCODED_INGEST_TOKEN = ""
+
 local DEFAULTS = {
   server_url = "",
   ingest_token = "",
@@ -69,6 +75,9 @@ function KobuddySettings:setServerURL(url)
 end
 
 function KobuddySettings:getIngestToken()
+  if HARDCODED_INGEST_TOKEN ~= "" then
+    return HARDCODED_INGEST_TOKEN
+  end
   return self.data.ingest_token or DEFAULTS.ingest_token
 end
 

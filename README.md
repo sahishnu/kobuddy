@@ -45,7 +45,7 @@ The plugin reads `KOReader/settings/statistics.sqlite3` (same layout KoInsight u
 ## Auth
 
 - **Device → server**: `Authorization: Bearer <INGEST_TOKEN>` on `/api/ingest/*` POST routes.
-- **Browser admin**: `POST /api/auth/login` with JSON `{ "password": "<ADMIN_PASSWORD>" }` sets an encrypted cookie (`iron-session`). Mutations (covers, hide book, edit ISBN/title) require that session. Set `PUBLIC_READ=false` to require login for `GET /api/books` and `GET /api/stats` as well.
+- **Browser admin**: `POST /api/auth/login` with JSON `{ "password": "<ADMIN_PASSWORD>" }` sets an encrypted cookie (`iron-session`). Mutations (covers, auto ISBN, hide book, edit metadata) require that session. Set `PUBLIC_READ=false` to require login for `GET /api/books` and `GET /api/stats` as well.
 
 ## Layout
 

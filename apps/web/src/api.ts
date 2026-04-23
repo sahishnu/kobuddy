@@ -7,11 +7,14 @@ export class ApiError extends Error {
 }
 
 export async function apiJson<T>(path: string, init?: RequestInit): Promise<T> {
+  const isFormData = init?.body instanceof FormData;
   const res = await fetch(path, {
     credentials: 'include',
     ...init,
     headers: {
-      ...(init?.body ? { 'Content-Type': 'application/json' } : {}),
+      ...(!isFormData && init?.body
+        ? { 'Content-Type': 'application/json' }
+        : {}),
       ...init?.headers,
     },
   });

@@ -9,6 +9,10 @@ import {
   ingestReadingData,
   registerDevice,
 } from '../services/ingest-service.js';
+import {
+  deviceIdFromMultipartField,
+  importStatisticsSqliteFromUpload,
+} from '../services/sqlite-statistics-import.js';
 
 function withPluginVersion<T extends z.ZodType>(cfg: AppConfig, schema: T) {
   return schema.superRefine((val, ctx) => {
@@ -46,10 +50,30 @@ export function ingestRouter(cfg: AppConfig, db: DbClient) {
     zValidator('json', importBody),
     async (c) => {
       const body = c.req.valid('json');
-      await ingestReadingData(db, body.books, body.stats);
+      ingestReadingData(db, body.books, body.stats);
       return c.json({ message: 'Upload successful' });
     },
   );
+
+  r.post('/import-sqlite', requireIngestToken(cfg), async (c) => {
+    try {
+      const body = await c.req.parseBody({ all: true });
+      const file = body.file;
+      if (!(file instanceof File)) {
+        return c.json({ error: 'Expected multipart field "file"' }, 400);
+      }
+      const deviceId = deviceIdFromMultipartField(body.device_id);
+      const result = await importStatisticsSqliteFromUpload(db, file, deviceId);
+      return c.json({
+        message: 'Upload successful',
+        booksImported: result.booksImported,
+        pageStatsImported: result.pageStatsImported,
+      });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Import failed';
+      return c.json({ error: msg }, 400);
+    }
+  });
 
   r.get('/health', (c) => {
     return c.json({
