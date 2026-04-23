@@ -28,10 +28,15 @@ type AppEnv = {
 export function createApp(cfg: AppConfig, db: DbClient, webDistAbs: string) {
   const app = new Hono<AppEnv>();
 
+  // Browsers reject `Access-Control-Allow-Origin: *` combined with
+  // `Access-Control-Allow-Credentials: true`. In production the UI and API
+  // are served from the same origin so CORS is only exercised in dev or when
+  // an admin UI is hosted separately. Echo the caller's Origin so credentialed
+  // requests work, and fall back to `*` for anonymous cross-origin probes.
   app.use(
     '*',
     cors({
-      origin: '*',
+      origin: (origin) => origin ?? '*',
       allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
       allowHeaders: ['Content-Type', 'Authorization', 'Cookie'],
       credentials: true,

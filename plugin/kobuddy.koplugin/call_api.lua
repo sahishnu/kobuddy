@@ -8,11 +8,44 @@ local JSON = require("json")
 local InfoMessage = require("ui/widget/infomessage")
 local _ = require("gettext")
 
-function response_not_valid(content)
+-- LuaSec (ssl.https) is required for HTTPS endpoints (e.g. Railway, Fly,
+-- Render, or any server behind TLS). KOReader ships LuaSec, but guard the
+-- require so the plugin still loads if it's unavailable on an older build.
+local https_ok, https = pcall(require, "ssl.https")
+if not https_ok then
+  https = nil
+end
+
+local function pick_http_client(url)
+  if type(url) == "string" and url:lower():match("^https://") then
+    if not https then
+      return nil, "HTTPS support (ssl.https / LuaSec) is not available in this KOReader build."
+    end
+    return https
+  end
+  return http
+end
+
+local function response_not_valid(content)
   logger.err("[kobuddy] callApi: response was not valid JSON", content)
   UIManager:show(InfoMessage:new({
     text = _("Server response is not valid."),
   }))
+end
+
+local function try_decode_json(content)
+  if type(content) ~= "string" or content == "" then
+    return nil
+  end
+  local first = string.sub(content, 1, 1)
+  if first ~= "{" and first ~= "[" then
+    return nil
+  end
+  local ok, result = pcall(JSON.decode, content)
+  if ok then
+    return result
+  end
+  return nil
 end
 
 return function(method, url, headers, body, filepath, quiet)
@@ -35,7 +68,19 @@ return function(method, url, headers, body, filepath, quiet)
 
   logger.dbg("[kobuddy] callApi:", request.method, request.url)
 
-  local code, resp_headers, status = socket.skip(1, http.request(request))
+  local client, client_err = pick_http_client(request.url)
+  if not client then
+    logger.err("[kobuddy] callApi:", client_err)
+    if not quiet then
+      UIManager:show(InfoMessage:new({
+        text = _(client_err),
+      }))
+    end
+    socketutil:reset_timeout()
+    return false, "https_unsupported"
+  end
+
+  local code, resp_headers, status = socket.skip(1, client.request(request))
   socketutil:reset_timeout()
 
   -- Raise error if network is unavailable
@@ -44,32 +89,38 @@ return function(method, url, headers, body, filepath, quiet)
     return false, "network_error"
   end
 
-  -- If the request returned successfully
-  if code == 200 then
+  -- If the request returned successfully (any 2xx)
+  local numeric_code = tonumber(code)
+  if numeric_code and numeric_code >= 200 and numeric_code < 300 then
     local content = table.concat(sink)
 
-    if content == nil or content == "" or string.sub(content, 1, 1) ~= "{" then
+    if content == nil or content == "" then
       response_not_valid(content)
       return false, "empty_response"
     end
 
-    local ok, result = pcall(JSON.decode, content)
-
-    if ok and result then
+    local result = try_decode_json(content)
+    if result then
       return true, result
-    else
-      response_not_valid(content)
-      return false, "invalid_response"
     end
+
+    response_not_valid(content)
+    return false, "invalid_response"
   else
+    local content = table.concat(sink)
+    local parsed = try_decode_json(content)
+    local server_msg = parsed and (parsed.error or parsed.message) or nil
+
     if not quiet then
-      logger.err("[kobuddy] callApi: HTTP error", status or code, resp_headers, result)
+      local text = server_msg
+          and ("Server error: " .. tostring(server_msg))
+        or ("Server error (HTTP " .. tostring(status or code) .. ")")
       UIManager:show(InfoMessage:new({
-        text = _("Server error" .. (result and ": " .. result["error"] or "")),
+        text = _(text),
       }))
     end
 
-    logger.err("[kobuddy] callApi: HTTP error", status or code, resp_headers)
-    return false, "http_error", code
+    logger.err("[kobuddy] callApi: HTTP error", status or code, server_msg)
+    return false, parsed or "http_error", code
   end
 end
