@@ -56,7 +56,7 @@ export function BookshelfRow({ books, className }: Props) {
               />
               {b.totalReadTime > 0 && (
                 <span className="text-[11px] tabular-nums text-muted-foreground">
-                  {formatReadTime(b.totalReadTime)}
+                  {formatReadTime(b.totalReadTime)} read
                 </span>
               )}
             </div>
