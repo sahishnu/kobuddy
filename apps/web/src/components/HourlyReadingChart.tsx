@@ -65,12 +65,15 @@ export function HourlyReadingChart({
                       render={
                         <button
                           type="button"
-                          className="w-full min-w-0 rounded transition-[height,background-color] duration-150 ease-out"
+                          className="w-full min-w-0 rounded-t transition-[height,background-color] duration-150 ease-out"
                           style={{
                             height: hgt,
-                            backgroundColor: isPeak
-                              ? 'var(--color-reading)'
-                              : 'color-mix(in oklab, var(--muted-foreground) 35%, var(--card))',
+                            backgroundColor:
+                              mins > 0
+                                ? isPeak
+                                  ? 'var(--color-reading)'
+                                  : 'color-mix(in oklab, var(--color-reading) 55%, var(--card))'
+                                : 'color-mix(in oklab, var(--muted-foreground) 35%, var(--card))',
                           }}
                           aria-label={tip}
                         />
@@ -82,6 +85,7 @@ export function HourlyReadingChart({
               );
             })}
           </div>
+          <div className="border-t border-border/50" />
           <div className="mt-1.5 grid gap-1" style={gridStyle}>
             {HOURS_0_23.map((h) => (
               <div key={h} className="flex min-w-0 justify-center">

@@ -133,6 +133,10 @@ export function booksRouter(cfg: AppConfig, db: DbClient) {
         coverPath: book.coverPath,
         coverSource: book.coverSource,
         lastOpen: sql<number>`max(${bookDevice.lastOpen})`.mapWith(Number),
+        totalReadTime:
+          sql<number>`coalesce(sum(${bookDevice.totalReadTime}), 0)`.mapWith(
+            Number,
+          ),
       })
       .from(book)
       .leftJoin(bookDevice, eq(bookDevice.bookMd5, book.md5))

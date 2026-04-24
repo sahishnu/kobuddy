@@ -24,6 +24,7 @@ export type BookListRow = {
   isbn: string | null;
   hidden: boolean;
   coverSource: string | null;
+  totalReadTime: number;
 };
 
 export function BooksPage() {

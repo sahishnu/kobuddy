@@ -75,6 +75,7 @@ export function HomePage() {
   const shelfBooks: ShelfBook[] = (shelf.data ?? []).map((b) => ({
     md5: b.md5,
     coverUrl: b.coverUrl,
+    totalReadTime: b.totalReadTime,
   }));
 
   const yearLabel = Number(
