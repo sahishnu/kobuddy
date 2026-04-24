@@ -54,7 +54,9 @@ export function StreakCard({
             {currentStreakDays} days
           </p>
           {isActive && (
-            <p className="text-xs text-muted-foreground">Keep it going!</p>
+            <p className="text-xs font-medium text-orange-500/60">
+              Keep it going!
+            </p>
           )}
         </div>
         <div className="h-px w-full bg-border" />

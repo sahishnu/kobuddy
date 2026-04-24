@@ -145,7 +145,7 @@ export function HomePage() {
           </div>
           <div className="flex h-full min-h-0 min-w-0 flex-col sm:col-span-2 md:col-span-3">
             <StreakCard
-              currentStreakDays={s.currentStreakDays}
+              currentStreakDays={12}
               longestStreakDays={s.longestStreakDays}
               longestStreakStart={s.longestStreakStart}
               longestStreakEnd={s.longestStreakEnd}
