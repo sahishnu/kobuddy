@@ -9,9 +9,11 @@ import {
 } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 
-type BentoCardProps = React.ComponentProps<typeof Card> & {
-  title?: string;
+type BentoCardProps = Omit<React.ComponentProps<typeof Card>, 'title'> & {
+  title?: React.ReactNode;
   description?: string;
+  /** Rendered inline with the title, pushed to the right. */
+  action?: React.ReactNode;
   /** Applied to `CardContent` (e.g. `flex flex-1 flex-col` for equal-height layouts). */
   contentClassName?: string;
   children: React.ReactNode;
@@ -20,6 +22,7 @@ type BentoCardProps = React.ComponentProps<typeof Card> & {
 export function BentoCard({
   title,
   description,
+  action,
   children,
   className,
   contentClassName,
@@ -36,9 +39,12 @@ export function BentoCard({
     >
       {title ? (
         <CardHeader className="gap-1 pb-2">
-          <CardTitle className="text-[11px] font-semibold tracking-[0.12em] text-muted-foreground uppercase">
-            {title}
-          </CardTitle>
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-[11px] font-semibold tracking-[0.12em] text-muted-foreground uppercase">
+              {title}
+            </CardTitle>
+            {action}
+          </div>
           {description ? (
             <CardDescription className="text-xs">{description}</CardDescription>
           ) : null}

@@ -162,7 +162,7 @@ html.dark {
   --font-serif: Merriweather, ui-serif, Georgia, serif;
   --font-mono: "Fira Code", ui-monospace, monospace;
 
-  --font-heading: Merriweather, ui-serif, Georgia, serif;
+  --font-heading: "Outfit Variable", Outfit, ui-sans-serif, system-ui, sans-serif;
 
   --color-reading: oklch(0.6420 0.1691 38.5815);
   --color-reading-dim: oklch(0.5012 0.126 42);

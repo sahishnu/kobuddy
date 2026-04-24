@@ -9,12 +9,21 @@ import { BentoCard } from '../components/BentoCard';
 import { BookshelfRow, type ShelfBook } from '../components/BookshelfRow';
 import { CurrentBookCard } from '../components/CurrentBookCard';
 import { HourlyReadingChart } from '../components/HourlyReadingChart';
-import { LifetimeStatsBento } from '../components/LifetimeStatsBento';
+
 import { ReadingHeatmap } from '../components/ReadingHeatmap';
 import { StreakCard } from '../components/StreakCard';
 import { WeekPagesCard } from '../components/WeekPagesCard';
 import { YearGoalCard } from '../components/YearGoalCard';
 import type { BookListRow } from './BooksPage';
+
+function formatLifetimeReadingTime(totalSeconds: number): string {
+  if (totalSeconds < 60) return `${Math.round(totalSeconds)}s`;
+  const h = Math.floor(totalSeconds / 3600);
+  const m = Math.floor((totalSeconds % 3600) / 60);
+  if (h === 0) return `${m} min`;
+  if (m === 0) return `${h}h`;
+  return `${h}h ${m}m`;
+}
 
 export function HomePage() {
   const timeZone = useMemo(
@@ -78,12 +87,25 @@ export function HomePage() {
   return (
     <div className="mx-auto w-full min-w-0 max-w-[1200px] space-y-4 overflow-x-hidden p-4 pb-10 md:p-5">
       <div className="grid grid-cols-12 gap-2.5 md:gap-3">
-        <div className="col-span-12 min-w-0">
-          <LifetimeStatsBento
-            totalReadingTimeSeconds={s.totalReadingTimeSeconds}
-            totalPagesRead={s.totalPagesRead}
-            totalBooks={s.totalBooks}
-          />
+        <div className="col-span-12 grid grid-cols-1 gap-2.5 sm:grid-cols-3 md:gap-3">
+          <BentoCard title="Reading Time">
+            <p className="font-heading text-2xl tracking-tight md:text-3xl">
+              {formatLifetimeReadingTime(s.totalReadingTimeSeconds)}
+            </p>
+            <p className="text-xs text-muted-foreground">Lifetime total</p>
+          </BentoCard>
+          <BentoCard title="Pages Read">
+            <p className="font-heading text-2xl tracking-tight md:text-3xl">
+              {s.totalPagesRead.toLocaleString()}
+            </p>
+            <p className="text-xs text-muted-foreground">Lifetime total</p>
+          </BentoCard>
+          <BentoCard title="Books">
+            <p className="font-heading text-2xl tracking-tight md:text-3xl">
+              {s.totalBooks.toLocaleString()}
+            </p>
+            <p className="text-xs text-muted-foreground">Lifetime total</p>
+          </BentoCard>
         </div>
 
         <div className="col-span-12 grid grid-cols-1 gap-2.5 sm:grid-cols-2 sm:items-stretch md:grid-cols-12 md:gap-3 md:items-stretch">
@@ -97,16 +119,23 @@ export function HomePage() {
           </div>
           <div className="flex h-full min-h-0 min-w-0 flex-col sm:col-span-1 md:col-span-3">
             <WeekPagesCard
-              pagesReadThisIsoWeek={s.pagesReadThisIsoWeek}
+              weekDailyReading={s.weekDailyReading}
               className="min-h-0 flex-1"
             />
           </div>
           <div className="flex flex-col justify-end pb-0.5 sm:col-span-2 md:col-span-3 md:justify-center md:pb-0">
-            <div className="text-foreground">
-              <span className="sr-only">kobuddy</span>
-              <div aria-hidden>
+            <div className="text-foreground text-center">
+              <span className="sr-only">Welcome to Sahishnus nook</span>
+              <p className="text-sm text-muted-foreground">Welcome to</p>
+              <div aria-hidden className="flex flex-col items-center">
                 <Letters
-                  text="kobuddy"
+                  text="Sahishnus"
+                  autoPlay
+                  color="currentColor"
+                  className="h-11 w-auto md:h-14"
+                />
+                <Letters
+                  text="nook"
                   autoPlay
                   color="currentColor"
                   className="h-11 w-auto md:h-14"
@@ -118,6 +147,8 @@ export function HomePage() {
             <StreakCard
               currentStreakDays={s.currentStreakDays}
               longestStreakDays={s.longestStreakDays}
+              longestStreakStart={s.longestStreakStart}
+              longestStreakEnd={s.longestStreakEnd}
               className="min-h-0 flex-1"
             />
           </div>

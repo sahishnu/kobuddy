@@ -1,4 +1,4 @@
-import type { CalendarDay } from '@kobuddy/common';
+import type { CalendarDay, WeekDayReading } from '@kobuddy/common';
 import type { StatRow } from './stats-service.js';
 import {
   isoWeekYearAndWeek,
@@ -84,6 +84,10 @@ export function calendarByDayInZone(
 export type StreakResult = {
   currentStreakDays: number;
   longestStreakDays: number;
+  /** Start date of the longest streak in yyyy-MM-dd format. */
+  longestStreakStart: string | null;
+  /** End date of the longest streak in yyyy-MM-dd format. */
+  longestStreakEnd: string | null;
 };
 
 /**
@@ -115,32 +119,59 @@ export function streaksFromCalendarDays(
   }
 
   let longest = 0;
+  let longestStart: string | null = null;
+  let longestEnd: string | null = null;
   const sortedDates = [...byDate.keys()].sort();
   let run = 0;
+  let runStart: string | null = null;
   let prevDay: string | null = null;
   for (const date of sortedDates) {
     const mins = byDate.get(date) ?? 0;
     if (mins <= 0) {
-      longest = Math.max(longest, run);
+      if (run > longest) {
+        longest = run;
+        longestStart = runStart;
+        longestEnd = prevDay;
+      }
       run = 0;
+      runStart = null;
       prevDay = null;
       continue;
     }
     if (prevDay) {
       const next = addGregorianDays(prevDay, 1);
-      run = next === date ? run + 1 : 1;
+      if (next === date) {
+        run += 1;
+      } else {
+        if (run > longest) {
+          longest = run;
+          longestStart = runStart;
+          longestEnd = prevDay;
+        }
+        run = 1;
+        runStart = date;
+      }
     } else {
       run = 1;
+      runStart = date;
     }
-    longest = Math.max(longest, run);
     prevDay = date;
   }
-  longest = Math.max(longest, run);
+  if (run > longest) {
+    longest = run;
+    longestStart = runStart;
+    longestEnd = prevDay;
+  }
 
   const currentStreakDays =
     (byDate.get(anchorYmd) ?? 0) > 0 ? countStreakBack(anchorYmd) : 0;
 
-  return { currentStreakDays, longestStreakDays: longest };
+  return {
+    currentStreakDays,
+    longestStreakDays: longest,
+    longestStreakStart: longestStart,
+    longestStreakEnd: longestEnd,
+  };
 }
 
 export type HourlyReadingProfile = {
@@ -241,6 +272,70 @@ export function booksFinishedInLocalYear(
     seen.add(r.bookMd5);
   }
   return seen.size;
+}
+
+const DOW_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as const;
+
+/** Reading pages and minutes broken down by ISO day-of-week for the current ISO week. */
+export function weekDailyReading(
+  rows: PageStatForDashboard[],
+  stats: StatRow[],
+  nowMs: number,
+  timeZone: string,
+): WeekDayReading[] {
+  const nowKey = localIsoWeekKey(Math.floor(nowMs / 1000), timeZone);
+
+  function isoDow(unixSec: number): number {
+    const { y, m, d } = localYmdParts(unixSec, timeZone);
+    const utcDay = new Date(Date.UTC(y, m - 1, d, 12)).getUTCDay();
+    return utcDay === 0 ? 7 : utcDay;
+  }
+
+  // --- pages per day (same positive-delta logic as pagesReadThisIsoWeek) ---
+  const inWeek = rows.filter(
+    (r) => localIsoWeekKey(r.startTime, timeZone) === nowKey,
+  );
+  const byKey = new Map<string, PageStatForDashboard[]>();
+  for (const r of inWeek) {
+    const k = `${r.bookMd5}\0${r.deviceId}`;
+    let arr = byKey.get(k);
+    if (!arr) {
+      arr = [];
+      byKey.set(k, arr);
+    }
+    arr.push(r);
+  }
+  const pagesByDow = new Array<number>(8).fill(0); // index 1..7
+  for (const arr of byKey.values()) {
+    arr.sort((a, b) => a.startTime - b.startTime);
+    const first = arr[0];
+    if (!first) continue;
+    let prev = first.page;
+    for (let i = 1; i < arr.length; i++) {
+      const cur = arr[i];
+      if (!cur) continue;
+      const delta = cur.page - prev;
+      if (delta > 0) {
+        const cap = cur.totalPages > 0 ? cur.totalPages : 10_000;
+        pagesByDow[isoDow(cur.startTime)] += Math.min(delta, cap);
+      }
+      prev = cur.page;
+    }
+  }
+
+  // --- minutes per day ---
+  const minsByDow = new Array<number>(8).fill(0);
+  for (const s of stats) {
+    if (localIsoWeekKey(s.startTime, timeZone) !== nowKey) continue;
+    minsByDow[isoDow(s.startTime)] += s.duration / 60;
+  }
+
+  return DOW_LABELS.map((label, i) => ({
+    dow: i + 1,
+    label,
+    pages: Math.round(pagesByDow[i + 1] ?? 0),
+    minutes: Math.round(minsByDow[i + 1] ?? 0),
+  }));
 }
 
 /** ISO week key for a civil y/m/d in that same calendar (used for tests). */

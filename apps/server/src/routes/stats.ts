@@ -17,6 +17,7 @@ import {
   hourlyReadingProfile,
   streaksFromCalendarDays,
   pagesReadThisIsoWeek as sumPagesReadThisIsoWeek,
+  weekDailyReading,
 } from '../stats/stats-dashboard.js';
 import {
   countUniqueAuthorTokens,
@@ -127,6 +128,12 @@ export function statsRouter(cfg: AppConfig, db: DbClient) {
       nowMs,
       timeZone,
     );
+    const weekDailyReadingResult = weekDailyReading(
+      stats,
+      stats,
+      nowMs,
+      timeZone,
+    );
     const currentBook = await loadCurrentReadingBook();
 
     const overview: StatsOverview = {
@@ -144,8 +151,11 @@ export function statsRouter(cfg: AppConfig, db: DbClient) {
       readingGoalBooksPerYear: cfg.READING_GOAL_BOOKS ?? null,
       booksFinishedThisLocalYear,
       pagesReadThisIsoWeek,
+      weekDailyReading: weekDailyReadingResult,
       currentStreakDays: streaks.currentStreakDays,
       longestStreakDays: streaks.longestStreakDays,
+      longestStreakStart: streaks.longestStreakStart,
+      longestStreakEnd: streaks.longestStreakEnd,
       hourlyReading: {
         averageMinutesByHour: hourly.averageMinutesByHour,
         peakHour: hourly.peakHour,

@@ -33,6 +33,14 @@ export type HourlyReadingBlock = {
   personaDetail: string;
 };
 
+export type WeekDayReading = {
+  /** ISO day of week: 1=Mon … 7=Sun */
+  dow: number;
+  label: string;
+  pages: number;
+  minutes: number;
+};
+
 export type StatsOverview = {
   totalReadingTimeSeconds: number;
   totalPagesRead: number;
@@ -54,8 +62,11 @@ export type StatsOverview = {
   booksFinishedThisLocalYear: number;
   /** Sum of positive page deltas within the current ISO week (see server implementation). */
   pagesReadThisIsoWeek: number;
+  weekDailyReading: WeekDayReading[];
   currentStreakDays: number;
   longestStreakDays: number;
+  longestStreakStart: string | null;
+  longestStreakEnd: string | null;
   hourlyReading: HourlyReadingBlock;
   currentBook: CurrentReadingBook | null;
 };

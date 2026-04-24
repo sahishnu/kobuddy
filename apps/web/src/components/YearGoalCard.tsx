@@ -94,11 +94,11 @@ export function YearGoalCard({
                 </span>
               }
             />
-            <p className="text-center text-sm">
-              <span className="font-heading text-xl font-semibold tracking-tight">
+            <p className="inline-flex items-baseline justify-center gap-1.5 text-center text-sm text-muted-foreground">
+              <span className="font-heading text-xl font-semibold tracking-tight text-foreground">
                 {booksFinishedThisLocalYear}
-              </span>{' '}
-              <span className="text-muted-foreground">/ {goal} finished</span>
+              </span>
+              <span>of {goal} books finished</span>
             </p>
           </>
         ) : (
