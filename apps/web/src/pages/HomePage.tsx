@@ -87,7 +87,7 @@ export function HomePage() {
   return (
     <div className="mx-auto w-full min-w-0 max-w-[1200px] space-y-4 overflow-x-hidden p-4 pb-10 md:p-5">
       <div className="grid grid-cols-12 gap-2.5 md:gap-3">
-        <div className="col-span-12 grid grid-cols-1 gap-2.5 sm:grid-cols-3 md:gap-3">
+        <div className="col-span-12 grid grid-cols-2 gap-2.5 sm:grid-cols-3 md:gap-3">
           <BentoCard title="Reading Time">
             <p className="font-heading text-2xl tracking-tight md:text-3xl">
               {formatLifetimeReadingTime(s.totalReadingTimeSeconds)}
@@ -106,6 +106,26 @@ export function HomePage() {
             </p>
             <p className="text-xs text-muted-foreground">Lifetime total</p>
           </BentoCard>
+          <div className="flex flex-col justify-end pb-0.5 sm:hidden">
+            <div className="text-foreground text-center">
+              <span className="sr-only">Welcome to Sahishnus nook</span>
+              <p className="text-sm text-muted-foreground">Welcome to</p>
+              <div aria-hidden className="flex flex-col items-center">
+                <Letters
+                  text="Sahishnus"
+                  autoPlay
+                  color="currentColor"
+                  className="h-11 w-auto"
+                />
+                <Letters
+                  text="nook"
+                  autoPlay
+                  color="currentColor"
+                  className="h-11 w-auto"
+                />
+              </div>
+            </div>
+          </div>
         </div>
 
         <div className="col-span-12 grid grid-cols-1 gap-2.5 sm:grid-cols-2 sm:items-stretch md:grid-cols-12 md:gap-3 md:items-stretch">
@@ -123,7 +143,7 @@ export function HomePage() {
               className="min-h-0 flex-1"
             />
           </div>
-          <div className="flex flex-col justify-end pb-0.5 sm:col-span-2 md:col-span-3 md:justify-center md:pb-0">
+          <div className="hidden flex-col justify-end pb-0.5 sm:flex sm:col-span-2 md:col-span-3 md:justify-center md:pb-0">
             <div className="text-foreground text-center">
               <span className="sr-only">Welcome to Sahishnus nook</span>
               <p className="text-sm text-muted-foreground">Welcome to</p>
