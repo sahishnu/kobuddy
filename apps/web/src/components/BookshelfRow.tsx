@@ -15,6 +15,8 @@ export type ShelfBook = {
   md5: string;
   coverUrl: string | null;
   totalReadTime: number;
+  percentComplete: number;
+  completed: boolean;
 };
 
 type Props = {
@@ -54,9 +56,18 @@ export function BookshelfRow({ books, className }: Props) {
                 coverUrl={b.coverUrl}
                 className="flex-1 shadow-md ring-white/15"
               />
-              {b.totalReadTime > 0 && (
+              {(b.totalReadTime > 0 ||
+                b.percentComplete > 0 ||
+                b.completed) && (
                 <span className="text-[11px] tabular-nums text-muted-foreground">
-                  {formatReadTime(b.totalReadTime)} read
+                  {b.totalReadTime > 0 &&
+                    `${formatReadTime(b.totalReadTime)} read`}
+                  {b.totalReadTime > 0 &&
+                    (b.percentComplete > 0 || b.completed) &&
+                    ' · '}
+                  {b.completed
+                    ? 'Complete'
+                    : b.percentComplete > 0 && `${b.percentComplete}%`}
                 </span>
               )}
             </div>

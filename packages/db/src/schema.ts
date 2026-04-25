@@ -30,6 +30,7 @@ export const book = sqliteTable(
     language: text('language'),
     isbn: text('isbn'),
     hidden: integer('hidden', { mode: 'boolean' }).notNull().default(false),
+    completedAt: integer('completed_at'),
     coverPath: text('cover_path'),
     coverSource: text('cover_source'),
     createdAt: integer('created_at', { mode: 'timestamp_ms' })
@@ -124,6 +125,7 @@ export const updateBookSchema = createUpdateSchema(book).pick({
   authors: true,
   isbn: true,
   hidden: true,
+  completedAt: true,
 });
 
 export const insertDeviceSchema = createInsertSchema(device);

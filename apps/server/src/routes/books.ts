@@ -33,6 +33,8 @@ const updateBookBody = z.object({
   customTitle: z.string().nullable().optional(),
   authors: z.string().nullable().optional(),
   isbn: z.string().nullable().optional(),
+  completed: z.boolean().optional(),
+  completedAt: z.number().nullable().optional(),
 });
 
 const coverAutoBody = z.object({
@@ -130,11 +132,23 @@ export function booksRouter(cfg: AppConfig, db: DbClient) {
         language: book.language,
         isbn: book.isbn,
         hidden: book.hidden,
+        completedAt: book.completedAt,
         coverPath: book.coverPath,
         coverSource: book.coverSource,
         lastOpen: sql<number>`max(${bookDevice.lastOpen})`.mapWith(Number),
         totalReadTime:
           sql<number>`coalesce(sum(${bookDevice.totalReadTime}), 0)`.mapWith(
+            Number,
+          ),
+        totalReadPages:
+          sql<number>`coalesce(max(${bookDevice.totalReadPages}), 0)`.mapWith(
+            Number,
+          ),
+        pages: sql<number>`coalesce(max(${bookDevice.pages}), 0)`.mapWith(
+          Number,
+        ),
+        percentComplete:
+          sql<number>`coalesce(max(case when ${bookDevice.pages} > 0 then ${bookDevice.totalReadPages} * 100 / ${bookDevice.pages} else 0 end), 0)`.mapWith(
             Number,
           ),
       })
@@ -168,6 +182,7 @@ export function booksRouter(cfg: AppConfig, db: DbClient) {
     return c.json(
       rows.map((b) => ({
         ...b,
+        completed: b.completedAt != null,
         displayTitle: displayTitle(b),
         coverUrl: b.coverPath ? `/api/books/${b.md5}/cover` : null,
       })),
@@ -403,18 +418,30 @@ export function booksRouter(cfg: AppConfig, db: DbClient) {
     zValidator('json', updateBookBody),
     async (c) => {
       const md5 = c.req.param('md5');
-      const patch = c.req.valid('json');
+      const {
+        completed,
+        completedAt: completedAtOverride,
+        ...rest
+      } = c.req.valid('json');
       const [existing] = await db
         .select()
         .from(book)
         .where(eq(book.md5, md5))
         .limit(1);
       if (!existing) return c.json({ error: 'Not found' }, 404);
+      const patch: typeof rest & { completedAt?: number | null } = { ...rest };
+      if (completedAtOverride !== undefined) {
+        patch.completedAt = completedAtOverride;
+      } else if (completed === true && existing.completedAt == null) {
+        patch.completedAt = Math.floor(Date.now() / 1000);
+      } else if (completed === false) {
+        patch.completedAt = null;
+      }
       await db.update(book).set(patch).where(eq(book.md5, md5));
       const hadManualCover = existing.coverSource === 'manual';
       const isbnChanged =
-        patch.isbn !== undefined && patch.isbn !== existing.isbn;
-      const newIsbn = patch.isbn ?? existing.isbn;
+        rest.isbn !== undefined && rest.isbn !== existing.isbn;
+      const newIsbn = rest.isbn ?? existing.isbn;
       if (isbnChanged) {
         await tryAutoCoverAfterIsbnUpdate(
           db,

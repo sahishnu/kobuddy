@@ -76,6 +76,8 @@ export function HomePage() {
     md5: b.md5,
     coverUrl: b.coverUrl,
     totalReadTime: b.totalReadTime,
+    percentComplete: Math.min(100, b.percentComplete),
+    completed: b.completed,
   }));
 
   const yearLabel = Number(

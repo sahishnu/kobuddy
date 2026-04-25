@@ -263,14 +263,27 @@ export function booksFinishedInLocalYear(
   }[],
   year: number,
   timeZone: string,
+  completedBooks?: { md5: string; completedAt: number }[],
 ): number {
   const seen = new Set<string>();
+
+  // Count books with page data reaching the end
   for (const r of rows) {
     if (r.totalPages <= 0) continue;
     if (r.page < r.totalPages - 1) continue;
     if (localYear(r.startTime, timeZone) !== year) continue;
     seen.add(r.bookMd5);
   }
+
+  // Also count manually-completed books by their completedAt timestamp year
+  if (completedBooks) {
+    for (const b of completedBooks) {
+      if (seen.has(b.md5)) continue;
+      if (localYear(b.completedAt, timeZone) !== year) continue;
+      seen.add(b.md5);
+    }
+  }
+
   return seen.size;
 }
 

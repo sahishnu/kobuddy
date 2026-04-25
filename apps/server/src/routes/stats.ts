@@ -1,6 +1,6 @@
 import type { StatsOverview } from '@kobuddy/common';
 import { book, bookDevice, pageStat } from '@kobuddy/db/schema';
-import { eq, sql } from 'drizzle-orm';
+import { and, eq, isNotNull, sql } from 'drizzle-orm';
 import { Hono } from 'hono';
 import type { IronSession } from 'iron-session';
 import type { AppConfig } from '../config.js';
@@ -118,10 +118,16 @@ export function statsRouter(cfg: AppConfig, db: DbClient) {
       timeZone,
       year: 'numeric',
     }).format(new Date(nowMs));
+    const completedBooks = await db
+      .select({ md5: book.md5, completedAt: book.completedAt })
+      .from(book)
+      .where(and(eq(book.hidden, false), isNotNull(book.completedAt)));
+
     const booksFinishedThisLocalYear = booksFinishedInLocalYear(
       stats,
       Number.parseInt(year, 10),
       timeZone,
+      completedBooks as { md5: string; completedAt: number }[],
     );
     const pagesReadThisIsoWeek = sumPagesReadThisIsoWeek(
       stats,

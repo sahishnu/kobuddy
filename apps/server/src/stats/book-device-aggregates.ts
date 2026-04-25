@@ -10,6 +10,7 @@ export type BookDeviceAggRow = {
   maxRead: number;
   maxPages: number;
   maxLastOpen: number;
+  completedAt: number | null;
 };
 
 /** Per-book rollups from `book_device` (visible books only). */
@@ -23,6 +24,7 @@ export async function loadBookDeviceAggregates(
       maxPages: sql<number>`max(${bookDevice.pages})`.mapWith(Number),
       maxLastOpen:
         sql<number>`max(coalesce(${bookDevice.lastOpen}, 0))`.mapWith(Number),
+      completedAt: book.completedAt,
     })
     .from(bookDevice)
     .innerJoin(book, eq(book.md5, bookDevice.bookMd5))
@@ -39,7 +41,10 @@ export function pickCurrentReadingBookMd5(
   rows: BookDeviceAggRow[],
 ): string | null {
   const unfinished = rows.filter(
-    (x) => (x.maxPages ?? 0) > 0 && (x.maxRead ?? 0) < (x.maxPages ?? 0),
+    (x) =>
+      x.completedAt == null &&
+      (x.maxPages ?? 0) > 0 &&
+      (x.maxRead ?? 0) < (x.maxPages ?? 0),
   );
   if (unfinished.length === 0) return null;
   unfinished.sort((a, b) => (b.maxLastOpen ?? 0) - (a.maxLastOpen ?? 0));

@@ -23,8 +23,13 @@ export type BookListRow = {
   customTitle: string | null;
   isbn: string | null;
   hidden: boolean;
+  completed: boolean;
+  completedAt: number | null;
   coverSource: string | null;
   totalReadTime: number;
+  totalReadPages: number;
+  pages: number;
+  percentComplete: number;
 };
 
 export function BooksPage() {

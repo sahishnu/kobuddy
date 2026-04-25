@@ -21,6 +21,24 @@ import { cn } from '@/lib/utils';
 import { apiJson } from '../api';
 import type { BookListRow } from './BooksPage';
 
+function formatReadTime(seconds: number): string {
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  if (h === 0) return `${m}m`;
+  if (m === 0) return `${h}h`;
+  return `${h}h ${m}m`;
+}
+
+function formatLastOpen(epoch: number | null): string {
+  if (!epoch) return '—';
+  const d = new Date(epoch * 1000);
+  return d.toLocaleDateString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+}
+
 export function AdminBooksPage() {
   const { openLoginModal } = useAuthUi();
   const [filter, setFilter] = useState('');
@@ -203,12 +221,18 @@ export function AdminBooksPage() {
         <TableHeader>
           <TableRow>
             <TableHead className="w-[72px]" />
-            <TableHead className="min-w-0 w-[38%] md:w-[34%]">Title</TableHead>
-            <TableHead className="hidden min-w-0 sm:table-cell sm:w-[26%]">
+            <TableHead className="min-w-0 w-[30%]">Title</TableHead>
+            <TableHead className="hidden min-w-0 sm:table-cell sm:w-[22%]">
               Authors
             </TableHead>
-            <TableHead className="hidden min-w-0 md:table-cell md:w-[120px] lg:w-[140px]">
-              ISBN
+            <TableHead className="min-w-0 w-[100px] text-right">
+              Pages
+            </TableHead>
+            <TableHead className="hidden min-w-0 sm:table-cell sm:w-[90px] text-right">
+              Read Time
+            </TableHead>
+            <TableHead className="hidden min-w-0 md:table-cell md:w-[110px] text-right">
+              Last Open
             </TableHead>
             <TableHead className="w-[88px]" />
           </TableRow>
@@ -239,11 +263,26 @@ export function AdminBooksPage() {
               >
                 {b.authors ?? '—'}
               </TableCell>
-              <TableCell
-                className="hidden min-w-0 max-w-0 truncate font-mono text-xs text-muted-foreground md:table-cell"
-                title={b.isbn ?? undefined}
-              >
-                {b.isbn ?? '—'}
+              <TableCell className="w-[120px]">
+                <div className="flex flex-col items-end gap-1.5">
+                  <span className="tabular-nums text-sm text-muted-foreground">
+                    {b.totalReadPages} / {b.pages}
+                  </span>
+                  <div className="relative h-1.5 w-full overflow-hidden rounded-full bg-muted">
+                    <div
+                      className="h-full rounded-full bg-primary transition-all"
+                      style={{
+                        width: `${b.pages > 0 ? Math.min(100, Math.round((b.totalReadPages / b.pages) * 100)) : 0}%`,
+                      }}
+                    />
+                  </div>
+                </div>
+              </TableCell>
+              <TableCell className="hidden tabular-nums text-right text-sm text-muted-foreground sm:table-cell">
+                {b.totalReadTime > 0 ? formatReadTime(b.totalReadTime) : '—'}
+              </TableCell>
+              <TableCell className="hidden text-right text-sm text-muted-foreground md:table-cell">
+                {formatLastOpen(b.lastOpen)}
               </TableCell>
               <TableCell className="w-[88px] text-right">
                 <Button

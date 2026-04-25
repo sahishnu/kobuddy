@@ -69,6 +69,8 @@ export function AdminBookEditDialog({
   const [authors, setAuthors] = useState('');
   const [isbn, setIsbn] = useState('');
   const [hidden, setHidden] = useState(false);
+  const [completed, setCompleted] = useState(false);
+  const [completedDate, setCompletedDate] = useState('');
   const [coverNonce, setCoverNonce] = useState(0);
   const [coverBroken, setCoverBroken] = useState(false);
   const [candidateQuery, setCandidateQuery] = useState('');
@@ -83,6 +85,12 @@ export function AdminBookEditDialog({
     setAuthors(book.authors ?? '');
     setIsbn(book.isbn ?? '');
     setHidden(book.hidden);
+    setCompleted(book.completed);
+    setCompletedDate(
+      book.completedAt
+        ? new Date(book.completedAt * 1000).toISOString().slice(0, 10)
+        : '',
+    );
     setCandidateQuery(book.displayTitle);
     setShowCandidates(false);
     setIsbnMatchQuery(book.displayTitle);
@@ -107,6 +115,14 @@ export function AdminBookEditDialog({
           customTitle: emptyToNull(customTitle),
           authors: emptyToNull(authors),
           isbn: emptyToNull(isbn),
+          completed,
+          ...(completed && completedDate
+            ? {
+                completedAt: Math.floor(
+                  new Date(completedDate).getTime() / 1000,
+                ),
+              }
+            : {}),
         }),
       });
       if (book && hidden !== book.hidden) {
@@ -446,6 +462,42 @@ export function AdminBookEditDialog({
                     ) : null}
                   </div>
 
+                  <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+                    <label className="flex cursor-pointer items-center gap-2 text-sm">
+                      <input
+                        type="checkbox"
+                        className="size-4 rounded border border-input"
+                        checked={completed}
+                        onChange={(e) => {
+                          setCompleted(e.target.checked);
+                          if (e.target.checked && !completedDate) {
+                            setCompletedDate(
+                              new Date().toISOString().slice(0, 10),
+                            );
+                          }
+                        }}
+                      />
+                      Completed
+                    </label>
+                    {completed && (
+                      <input
+                        type="date"
+                        className="h-8 rounded-md border border-input bg-transparent px-2 text-sm"
+                        value={completedDate}
+                        onChange={(e) => setCompletedDate(e.target.value)}
+                      />
+                    )}
+                    <label className="flex cursor-pointer items-center gap-2 text-sm">
+                      <input
+                        type="checkbox"
+                        className="size-4 rounded border border-input"
+                        checked={hidden}
+                        onChange={(e) => setHidden(e.target.checked)}
+                      />
+                      Hidden
+                    </label>
+                  </div>
+
                   <div className="space-y-3">
                     <div className="space-y-2">
                       <Label htmlFor={`${baseId}-custom`}>
@@ -571,15 +623,6 @@ export function AdminBookEditDialog({
                         </div>
                       ) : null}
                     </div>
-                    <label className="flex cursor-pointer items-center gap-2 text-sm">
-                      <input
-                        type="checkbox"
-                        className="size-4 rounded border border-input"
-                        checked={hidden}
-                        onChange={(e) => setHidden(e.target.checked)}
-                      />
-                      Hidden from library and stats lists
-                    </label>
                   </div>
 
                   {saveMeta.isError ||

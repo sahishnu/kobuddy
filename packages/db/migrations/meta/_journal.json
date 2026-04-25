@@ -8,6 +8,20 @@
       "when": 1776615181999,
       "tag": "0000_initial",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1777074481384,
+      "tag": "0001_serious_wolfpack",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1777160881384,
+      "tag": "0002_replace_completed_with_completed_at",
+      "breakpoints": true
     }
   ]
 }
