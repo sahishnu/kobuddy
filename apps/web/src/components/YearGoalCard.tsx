@@ -31,7 +31,7 @@ function GoalRing({
       <svg
         width={size}
         height={size}
-        className="-rotate-90 text-muted/50"
+        className="-rotate-90 text-foreground/10 dark:text-muted/50"
         role="img"
         aria-label="Year reading goal progress"
       >
