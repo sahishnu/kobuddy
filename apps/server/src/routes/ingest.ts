@@ -3,6 +3,7 @@ import { devicePayloadSchema, ingestPayloadSchema } from '@kobuddy/common';
 import { type Context, Hono } from 'hono';
 import type { z } from 'zod';
 import type { AppConfig } from '../config.js';
+import { clientIp } from '../lib/client-ip.js';
 import type { DbClient } from '../lib/db.js';
 import { ingestLog } from '../lib/logger.js';
 import { requireIngestToken } from '../middleware/require-bearer.js';
@@ -26,15 +27,6 @@ function withPluginVersion<T extends z.ZodType>(cfg: AppConfig, schema: T) {
       });
     }
   });
-}
-
-function clientIp(c: Context): string {
-  return (
-    c.req.header('x-forwarded-for')?.split(',')[0]?.trim() ??
-    c.req.header('cf-connecting-ip') ??
-    c.req.header('x-real-ip') ??
-    'unknown'
-  );
 }
 
 type ValidatorIssue = {

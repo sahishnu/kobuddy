@@ -96,6 +96,13 @@ export const pageStat = sqliteTable(
   ],
 );
 
+/** Key-value cache for expensive computed results (e.g. stats overview per timezone). */
+export const statsCache = sqliteTable('stats_cache', {
+  key: text('key').primaryKey(),
+  value: text('value').notNull(),
+  computedAt: integer('computed_at').notNull(),
+});
+
 export const deviceRelations = relations(device, ({ many }) => ({
   bookDevices: many(bookDevice),
   pageStats: many(pageStat),

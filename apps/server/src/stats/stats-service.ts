@@ -132,6 +132,7 @@ export const statsService = {
     return books.reduce((acc, b) => acc + (b.totalReadPages ?? 0), 0);
   },
 
+  /** @deprecated Use `calendarByDayInZone` from `stats-dashboard.ts` which is timezone-aware. */
   calendarByDay(stats: StatRow[]): CalendarDay[] {
     const map = new Map<string, number>();
     for (const s of stats) {

@@ -5,14 +5,10 @@ import { Scalar } from '@scalar/hono-api-reference';
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { pinoLogger } from 'hono-pino';
-import type { IronSession } from 'iron-session';
 import pino from 'pino';
 import type { AppConfig } from './config.js';
 import type { DbClient } from './lib/db.js';
-import {
-  ironSessionMiddleware,
-  type SessionData,
-} from './middleware/session.js';
+import { type AppEnv, ironSessionMiddleware } from './middleware/session.js';
 import { openApiDocument } from './openapi-spec.js';
 import { authRouter } from './routes/auth.js';
 import { booksRouter } from './routes/books.js';
@@ -20,10 +16,6 @@ import { ingestRouter } from './routes/ingest.js';
 import { pluginZipRouter } from './routes/plugin-zip.js';
 import { statsRouter } from './routes/stats.js';
 import { sessionOptions } from './session-options.js';
-
-type AppEnv = {
-  Variables: { session: IronSession<SessionData> };
-};
 
 export function createApp(cfg: AppConfig, db: DbClient, webDistAbs: string) {
   const app = new Hono<AppEnv>();

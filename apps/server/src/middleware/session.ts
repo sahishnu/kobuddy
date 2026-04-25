@@ -1,8 +1,13 @@
 import type { MiddlewareHandler } from 'hono';
+import type { IronSession } from 'iron-session';
 import { getIronSession, type SessionOptions } from 'iron-session';
 
 export type SessionData = {
   isAdmin?: boolean;
+};
+
+export type AppEnv = {
+  Variables: { session: IronSession<SessionData> };
 };
 
 export function ironSessionMiddleware(

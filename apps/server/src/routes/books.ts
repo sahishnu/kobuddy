@@ -1,22 +1,26 @@
-import fs from 'node:fs';
-import path from 'node:path';
 import { zValidator } from '@hono/zod-validator';
 import { book, bookDevice, pageStat } from '@kobuddy/db/schema';
 import { and, asc, desc, eq, ne, sql } from 'drizzle-orm';
 import { Hono } from 'hono';
-import type { IronSession } from 'iron-session';
 import { z } from 'zod';
 import type { AppConfig } from '../config.js';
 import type { DbClient } from '../lib/db.js';
+import { displayTitle } from '../lib/display.js';
 import { requireAdmin } from '../middleware/require-admin.js';
 import { requirePublicReadOrAdmin } from '../middleware/require-public-or-admin.js';
-import type { SessionData } from '../middleware/session.js';
+import type { AppEnv } from '../middleware/session.js';
 import {
-  fetchCoverBytes,
   normalizeIsbnForStorage,
   searchCoverCandidates,
   searchIsbnCandidates,
 } from '../services/cover-lookup-service.js';
+import {
+  autoFetchCover,
+  deleteCoverFile,
+  readCoverFile,
+  saveCoverFile,
+  tryAutoCoverAfterIsbnUpdate,
+} from '../services/cover-service.js';
 import {
   deviceIdFromMultipartField,
   importStatisticsSqliteFromUpload,
@@ -40,56 +44,15 @@ const updateBookBody = z.object({
 const coverAutoBody = z.object({
   provider: z.enum(['openlibrary', 'googlebooks']).optional(),
   providerId: z.string().optional(),
-  /** From candidate list; required for Google when applying a picked volume by id. */
   thumbnailUrl: z.string().optional(),
 });
 
 const isbnAutoBody = z.object({
-  /** When set, stores this ISBN (validated). When omitted, uses first search hit. */
   isbn: z.string().min(1).optional(),
 });
 
-function displayTitle(b: { customTitle: string | null; title: string | null }) {
-  return b.customTitle || b.title || '(untitled)';
-}
-
-async function tryAutoCoverAfterIsbnUpdate(
-  db: DbClient,
-  cfg: AppConfig,
-  md5: string,
-  hadManualCover: boolean,
-  newIsbn: string | null,
-): Promise<void> {
-  if (hadManualCover || !newIsbn) return;
-  const [b] = await db.select().from(book).where(eq(book.md5, md5)).limit(1);
-  if (!b?.isbn) return;
-  const candidates = await searchCoverCandidates(
-    displayTitle(b),
-    b.authors ?? '',
-    b.isbn,
-    cfg.GOOGLE_BOOKS_API_KEY,
-  );
-  const first = candidates[0];
-  if (!first) return;
-  const bytes = await fetchCoverBytes(first, cfg.GOOGLE_BOOKS_API_KEY);
-  if (!bytes) return;
-  const rel = `covers/${md5}.jpg`;
-  const fp = path.join(cfg.DATA_PATH, rel);
-  fs.mkdirSync(path.dirname(fp), { recursive: true });
-  fs.writeFileSync(fp, bytes);
-  await db
-    .update(book)
-    .set({
-      coverPath: rel,
-      coverSource: `${first.provider}:${first.providerId}`,
-    })
-    .where(eq(book.md5, md5));
-}
-
 export function booksRouter(cfg: AppConfig, db: DbClient) {
-  const r = new Hono<{
-    Variables: { session: IronSession<SessionData> };
-  }>();
+  const r = new Hono<AppEnv>();
 
   r.get('/', requirePublicReadOrAdmin(cfg), async (c) => {
     const showHidden = c.req.query('showHidden') === 'true';
@@ -210,6 +173,8 @@ export function booksRouter(cfg: AppConfig, db: DbClient) {
     }
   });
 
+  // --- Cover endpoints ---
+
   r.get('/:md5/cover/candidates', requireAdmin, async (c) => {
     const md5 = c.req.param('md5');
     const [b] = await db.select().from(book).where(eq(book.md5, md5)).limit(1);
@@ -259,19 +224,8 @@ export function booksRouter(cfg: AppConfig, db: DbClient) {
         candidate = candidates[0] ?? null;
       }
       if (!candidate) return c.json({ error: 'No cover found' }, 404);
-      const bytes = await fetchCoverBytes(candidate, cfg.GOOGLE_BOOKS_API_KEY);
-      if (!bytes) return c.json({ error: 'Download failed' }, 502);
-      const rel = `covers/${md5}.jpg`;
-      const fp = path.join(cfg.DATA_PATH, rel);
-      fs.mkdirSync(path.dirname(fp), { recursive: true });
-      fs.writeFileSync(fp, bytes);
-      await db
-        .update(book)
-        .set({
-          coverPath: rel,
-          coverSource: `${candidate.provider}:${candidate.providerId}`,
-        })
-        .where(eq(book.md5, md5));
+      const ok = await autoFetchCover(db, cfg, md5, candidate);
+      if (!ok) return c.json({ error: 'Download failed' }, 502);
       return c.json({
         ok: true,
         coverSource: `${candidate.provider}:${candidate.providerId}`,
@@ -283,9 +237,8 @@ export function booksRouter(cfg: AppConfig, db: DbClient) {
     const md5 = c.req.param('md5');
     const [b] = await db.select().from(book).where(eq(book.md5, md5)).limit(1);
     if (!b?.coverPath) return c.body(null, 404);
-    const fp = path.join(cfg.DATA_PATH, b.coverPath);
-    if (!fs.existsSync(fp)) return c.body(null, 404);
-    const buf = fs.readFileSync(fp);
+    const buf = await readCoverFile(cfg, b.coverPath);
+    if (!buf) return c.body(null, 404);
     return new Response(buf, {
       headers: {
         'Content-Type': 'image/jpeg',
@@ -304,30 +257,17 @@ export function booksRouter(cfg: AppConfig, db: DbClient) {
     const maxBytes = cfg.MAX_COVER_MB * 1024 * 1024;
     const buf = Buffer.from(await file.arrayBuffer());
     if (buf.length > maxBytes) return c.json({ error: 'File too large' }, 400);
-    const rel = `covers/${md5}.jpg`;
-    const fp = path.join(cfg.DATA_PATH, rel);
-    fs.mkdirSync(path.dirname(fp), { recursive: true });
-    fs.writeFileSync(fp, buf);
-    await db
-      .update(book)
-      .set({ coverPath: rel, coverSource: 'manual' })
-      .where(eq(book.md5, md5));
+    await saveCoverFile(db, cfg, md5, buf, 'manual');
     return c.json({ ok: true });
   });
 
   r.delete('/:md5/cover', requireAdmin, async (c) => {
     const md5 = c.req.param('md5');
-    const [b] = await db.select().from(book).where(eq(book.md5, md5)).limit(1);
-    if (b?.coverPath) {
-      const fp = path.join(cfg.DATA_PATH, b.coverPath);
-      if (fs.existsSync(fp)) fs.unlinkSync(fp);
-    }
-    await db
-      .update(book)
-      .set({ coverPath: null, coverSource: null })
-      .where(eq(book.md5, md5));
+    await deleteCoverFile(db, cfg, md5);
     return c.json({ ok: true });
   });
+
+  // --- ISBN endpoints ---
 
   r.get('/:md5/isbn/candidates', requireAdmin, async (c) => {
     const md5 = c.req.param('md5');
@@ -379,6 +319,8 @@ export function booksRouter(cfg: AppConfig, db: DbClient) {
       return c.json({ ok: true, isbn: nextIsbn });
     },
   );
+
+  // --- Book CRUD ---
 
   r.put('/:md5/hide', requireAdmin, zValidator('json', hideBody), async (c) => {
     const md5 = c.req.param('md5');

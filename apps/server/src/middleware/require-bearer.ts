@@ -1,16 +1,8 @@
 import type { MiddlewareHandler } from 'hono';
 import type { AppConfig } from '../config.js';
+import { clientIp } from '../lib/client-ip.js';
 import { ingestLog } from '../lib/logger.js';
 import { timingSafeStringEqual } from '../lib/token.js';
-
-function clientIp(c: Parameters<MiddlewareHandler>[0]): string {
-  return (
-    c.req.header('x-forwarded-for')?.split(',')[0]?.trim() ??
-    c.req.header('cf-connecting-ip') ??
-    c.req.header('x-real-ip') ??
-    'unknown'
-  );
-}
 
 export function requireIngestToken(cfg: AppConfig): MiddlewareHandler {
   return async (c, next) => {

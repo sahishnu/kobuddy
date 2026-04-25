@@ -2,8 +2,9 @@ import type { KoreaderBook, PageStatPayload } from '@kobuddy/common';
 import { book, bookDevice, device, pageStat } from '@kobuddy/db/schema';
 import { sql } from 'drizzle-orm';
 import type { DbClient } from '../lib/db.js';
+import { invalidateStatsCache } from '../stats/stats-cache.js';
 
-const UNKNOWN_DEVICE_ID = 'unknown-device';
+export const UNKNOWN_DEVICE_ID = 'unknown-device';
 
 /** better-sqlite3 transactions must be synchronous — async callbacks throw. */
 export function ingestReadingData(
@@ -103,6 +104,8 @@ export function ingestReadingData(
         .run();
     }
   });
+
+  invalidateStatsCache(db).catch(() => {});
 }
 
 export async function registerDevice(db: DbClient, id: string, model: string) {
