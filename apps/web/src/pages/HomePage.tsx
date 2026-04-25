@@ -1,6 +1,7 @@
 import type { StatsOverview } from '@kobuddy/common';
 import { Letters } from '@kumailnanji/letters';
 import { useQuery } from '@tanstack/react-query';
+import type { ReactNode } from 'react';
 import { useMemo } from 'react';
 import { AppFooterBentoSlot } from '@/components/AppFooter';
 import { Spinner } from '@/components/ui/spinner';
@@ -15,6 +16,14 @@ import { StreakCard } from '../components/StreakCard';
 import { WeekPagesCard } from '../components/WeekPagesCard';
 import { YearGoalCard } from '../components/YearGoalCard';
 import type { BookListRow } from './BooksPage';
+
+const nookGradient = (id: string): ReactNode => (
+  <linearGradient id={id} x1="0%" y1="0%" x2="100%" y2="0%">
+    <stop offset="0%" stopColor="oklch(0.65 0.18 35)" />
+    <stop offset="50%" stopColor="oklch(0.62 0.16 15)" />
+    <stop offset="100%" stopColor="oklch(0.55 0.12 280)" />
+  </linearGradient>
+);
 
 function formatLifetimeReadingTime(totalSeconds: number): string {
   if (totalSeconds < 60) return `${Math.round(totalSeconds)}s`;
@@ -117,13 +126,15 @@ export function HomePage() {
                 <Letters
                   text="Sahishnus"
                   autoPlay
-                  color="currentColor"
+                  color="url(#nook-grad-sm-1)"
+                  svgDefs={nookGradient('nook-grad-sm-1')}
                   className="h-11 w-auto"
                 />
                 <Letters
                   text="nook"
                   autoPlay
-                  color="currentColor"
+                  color="url(#nook-grad-sm-2)"
+                  svgDefs={nookGradient('nook-grad-sm-2')}
                   className="h-11 w-auto"
                 />
               </div>
@@ -154,13 +165,15 @@ export function HomePage() {
                 <Letters
                   text="Sahishnus"
                   autoPlay
-                  color="currentColor"
+                  color="url(#nook-grad-md-1)"
+                  svgDefs={nookGradient('nook-grad-md-1')}
                   className="h-11 w-auto md:h-14"
                 />
                 <Letters
                   text="nook"
                   autoPlay
-                  color="currentColor"
+                  color="url(#nook-grad-md-2)"
+                  svgDefs={nookGradient('nook-grad-md-2')}
                   className="h-11 w-auto md:h-14"
                 />
               </div>
