@@ -1,15 +1,8 @@
 import { Link } from '@tanstack/react-router';
 import { BookCoverThumb } from '@/components/BookCoverThumb';
+import { formatDuration } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { BentoCard } from './BentoCard';
-
-function formatReadTime(seconds: number): string {
-  const h = Math.floor(seconds / 3600);
-  const m = Math.floor((seconds % 3600) / 60);
-  if (h === 0) return `${m}m`;
-  if (m === 0) return `${h}h`;
-  return `${h}h ${m}m`;
-}
 
 export type ShelfBook = {
   md5: string;
@@ -61,7 +54,7 @@ export function BookshelfRow({ books, className }: Props) {
                 b.completed) && (
                 <span className="text-[11px] tabular-nums text-muted-foreground">
                   {b.totalReadTime > 0 &&
-                    `${formatReadTime(b.totalReadTime)} read`}
+                    `${formatDuration(b.totalReadTime)} read`}
                   {b.totalReadTime > 0 &&
                     (b.percentComplete > 0 || b.completed) &&
                     ' · '}

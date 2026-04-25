@@ -1,5 +1,5 @@
 import { AlertDialog } from '@base-ui/react/alert-dialog';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { Globe, LibraryBig, LogOut, Moon, Sun, Upload } from 'lucide-react';
 import { useEffect, useState } from 'react';
@@ -9,6 +9,8 @@ import { BentoCard } from '@/components/BentoCard';
 import { ImportKoreaderModal } from '@/components/ImportKoreaderModal';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
+import { DIALOG_BACKDROP_CLASS, DIALOG_POPUP_CLASS } from '@/lib/dialog-styles';
+import { useMe } from '@/lib/hooks';
 import { cn } from '@/lib/utils';
 import { useTheme } from '@/theme/theme-provider';
 
@@ -26,11 +28,7 @@ export function AppFooterContent({ className }: AppFooterContentProps) {
   const [logoutDialogOpen, setLogoutDialogOpen] = useState(false);
   const [importKoreaderOpen, setImportKoreaderOpen] = useState(false);
 
-  const me = useQuery({
-    queryKey: ['me'],
-    queryFn: () => apiJson<{ isAdmin: boolean }>('/api/auth/me'),
-    staleTime: 30_000,
-  });
+  const me = useMe();
 
   const logout = useMutation({
     mutationFn: () =>
@@ -125,21 +123,11 @@ export function AppFooterContent({ className }: AppFooterContentProps) {
             >
               <AlertDialog.Portal>
                 <AlertDialog.Backdrop
-                  className={cn(
-                    'fixed inset-0 z-[60] bg-black/45 backdrop-blur-[2px]',
-                    'transition-opacity duration-200',
-                    'data-[starting-style]:opacity-0 data-[ending-style]:opacity-0',
-                  )}
+                  className={cn(DIALOG_BACKDROP_CLASS, 'z-[60]')}
                 />
                 <AlertDialog.Viewport className="fixed inset-0 z-[60] grid place-items-center p-4">
                   <AlertDialog.Popup
-                    className={cn(
-                      'w-full max-w-sm rounded-xl border border-border/80 bg-card p-6 text-card-foreground shadow-lg',
-                      'ring-1 ring-foreground/[0.07] dark:ring-white/[0.04]',
-                      'outline-none transition-transform duration-200',
-                      'data-[starting-style]:scale-[0.98] data-[starting-style]:opacity-0',
-                      'data-[ending-style]:scale-[0.98] data-[ending-style]:opacity-0',
-                    )}
+                    className={cn(DIALOG_POPUP_CLASS, 'z-[60] max-w-sm p-6')}
                   >
                     <AlertDialog.Title className="font-heading text-lg font-semibold tracking-tight">
                       Log out?

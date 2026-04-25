@@ -52,7 +52,6 @@ export function HourlyReadingChart({
             {HOURS_0_23.map((hour) => {
               const mins = averageMinutesByHour[hour] ?? 0;
               const hgt = Math.max(2, (mins / max) * barH);
-              const isPeak = hour === peakHourIndex;
               const tip = `${hour}:00–${hour + 1}:00 · ~${mins} min / day avg`;
               return (
                 <div

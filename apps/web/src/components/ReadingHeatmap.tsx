@@ -55,23 +55,6 @@ function buildHeatmapCells(calendar: CalendarDay[]): Cell[] {
   return days;
 }
 
-function buildHeatmapCellsCalendarYear(
-  calendar: CalendarDay[],
-  year: number,
-): Cell[] {
-  const byDate = new Map(calendar.map((c) => [c.date, c.minutes] as const));
-  const start = new Date(year, 0, 1);
-  const end = new Date(year, 11, 31);
-  const days: Cell[] = [];
-  for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-    const key = localYmd(d);
-    days.push({ date: key, minutes: byDate.get(key) ?? 0 });
-  }
-  return days;
-}
-
-export type ReadingHeatmapWindow = 'rolling365' | 'calendarYear';
-
 function padToWeekGrid(days: Cell[]): { key: string; cell: Cell | null }[] {
   const firstDay = days[0];
   if (!firstDay) return [];
@@ -135,7 +118,6 @@ function formatDayLabel(ymd: string): string {
 
 type ReadingHeatmapProps = {
   calendar: CalendarDay[];
-  window?: ReadingHeatmapWindow;
 };
 
 function useHeatmapCellPx(): number {
@@ -171,18 +153,11 @@ function useScrollHeatmapToEnd(scrollRef: RefObject<HTMLElement | null>) {
   });
 }
 
-export function ReadingHeatmap({
-  calendar,
-  window = 'rolling365',
-}: ReadingHeatmapProps) {
+export function ReadingHeatmap({ calendar }: ReadingHeatmapProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const cellPx = useHeatmapCellPx();
 
-  const year = new Date().getFullYear();
-  const days =
-    window === 'calendarYear'
-      ? buildHeatmapCellsCalendarYear(calendar, year)
-      : buildHeatmapCells(calendar);
+  const days = buildHeatmapCells(calendar);
   const items = padToWeekGrid(days);
   const maxMinutes = Math.max(1, ...days.map((d) => d.minutes));
   const numWeeks = items.length / 7;

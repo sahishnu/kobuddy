@@ -1,7 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { BookCoverThumb } from '@/components/BookCoverThumb';
-import { Spinner } from '@/components/ui/spinner';
+import { PageError } from '@/components/PageError';
+import { PageSpinner } from '@/components/PageSpinner';
 import {
   Table,
   TableBody,
@@ -10,27 +11,9 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import type { BookListRow } from '@/lib/types';
 import { cn } from '@/lib/utils';
 import { apiJson } from '../api';
-
-export type BookListRow = {
-  md5: string;
-  displayTitle: string;
-  coverUrl: string | null;
-  authors: string | null;
-  lastOpen: number | null;
-  title: string | null;
-  customTitle: string | null;
-  isbn: string | null;
-  hidden: boolean;
-  completed: boolean;
-  completedAt: number | null;
-  coverSource: string | null;
-  totalReadTime: number;
-  totalReadPages: number;
-  pages: number;
-  percentComplete: number;
-};
 
 export function BooksPage() {
   const books = useQuery({
@@ -39,21 +22,11 @@ export function BooksPage() {
   });
 
   if (books.isLoading) {
-    return (
-      <div className="flex justify-center p-10">
-        <Spinner className="size-6 text-muted-foreground" />
-      </div>
-    );
+    return <PageSpinner />;
   }
 
   if (books.isError) {
-    return (
-      <div className="space-y-3 p-6">
-        <p className="text-sm text-destructive">
-          {(books.error as Error).message}
-        </p>
-      </div>
-    );
+    return <PageError error={books.error} />;
   }
 
   const rows = books.data ?? [];

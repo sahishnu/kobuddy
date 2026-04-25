@@ -6,6 +6,7 @@ import { Button, buttonVariants } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
+import { DIALOG_BACKDROP_CLASS, DIALOG_POPUP_CLASS } from '@/lib/dialog-styles';
 import { cn } from '@/lib/utils';
 
 type ImportKoreaderModalProps = {
@@ -53,21 +54,12 @@ export function ImportKoreaderModal({
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
-        <Dialog.Backdrop
-          className={cn(
-            'fixed inset-0 z-50 bg-black/45 backdrop-blur-[2px]',
-            'transition-opacity duration-200',
-            'data-[starting-style]:opacity-0 data-[ending-style]:opacity-0',
-          )}
-        />
+        <Dialog.Backdrop className={cn(DIALOG_BACKDROP_CLASS, 'z-50')} />
         <Dialog.Viewport className="fixed inset-0 z-50 grid place-items-center p-4">
           <Dialog.Popup
             className={cn(
-              'max-h-[min(90dvh,720px)] w-full max-w-lg overflow-y-auto rounded-xl border border-border/80 bg-card p-6 text-card-foreground shadow-lg',
-              'ring-1 ring-foreground/[0.07] dark:ring-white/[0.04]',
-              'outline-none transition-transform duration-200',
-              'data-[starting-style]:scale-[0.98] data-[starting-style]:opacity-0',
-              'data-[ending-style]:scale-[0.98] data-[ending-style]:opacity-0',
+              DIALOG_POPUP_CLASS,
+              'z-50 max-h-[min(90dvh,720px)] max-w-lg overflow-y-auto p-6',
             )}
           >
             <Dialog.Title className="font-heading text-xl font-semibold tracking-tight">

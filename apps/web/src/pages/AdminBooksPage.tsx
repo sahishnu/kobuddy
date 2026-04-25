@@ -6,9 +6,10 @@ import { useMemo, useState } from 'react';
 import { useAuthUi } from '@/auth-ui';
 import { AdminBookEditDialog } from '@/components/AdminBookEditDialog';
 import { BookCoverThumb } from '@/components/BookCoverThumb';
+import { PageError } from '@/components/PageError';
+import { PageSpinner } from '@/components/PageSpinner';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Spinner } from '@/components/ui/spinner';
 import {
   Table,
   TableBody,
@@ -17,17 +18,12 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { DIALOG_BACKDROP_CLASS, DIALOG_POPUP_CLASS } from '@/lib/dialog-styles';
+import { formatDuration } from '@/lib/format';
+import { useMe } from '@/lib/hooks';
+import type { BookListRow } from '@/lib/types';
 import { cn } from '@/lib/utils';
 import { apiJson } from '../api';
-import type { BookListRow } from './BooksPage';
-
-function formatReadTime(seconds: number): string {
-  const h = Math.floor(seconds / 3600);
-  const m = Math.floor((seconds % 3600) / 60);
-  if (h === 0) return `${m}m`;
-  if (m === 0) return `${h}h`;
-  return `${h}h ${m}m`;
-}
 
 function formatLastOpen(epoch: number | null): string {
   if (!epoch) return '—';
@@ -46,11 +42,7 @@ export function AdminBooksPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [hiddenListOpen, setHiddenListOpen] = useState(false);
 
-  const me = useQuery({
-    queryKey: ['me'],
-    queryFn: () => apiJson<{ isAdmin: boolean }>('/api/auth/me'),
-    staleTime: 30_000,
-  });
+  const me = useMe();
 
   const allBooks = useQuery({
     queryKey: ['books', 'admin', 'lastOpen', 'showHidden'],
@@ -111,11 +103,7 @@ export function AdminBooksPage() {
   };
 
   if (me.isLoading) {
-    return (
-      <div className="flex justify-center p-10">
-        <Spinner className="size-6 text-muted-foreground" />
-      </div>
-    );
+    return <PageSpinner />;
   }
 
   if (!me.data?.isAdmin) {
@@ -145,21 +133,11 @@ export function AdminBooksPage() {
   }
 
   if (allBooks.isLoading) {
-    return (
-      <div className="flex justify-center p-10">
-        <Spinner className="size-6 text-muted-foreground" />
-      </div>
-    );
+    return <PageSpinner />;
   }
 
   if (allBooks.isError) {
-    return (
-      <div className="space-y-3 p-6">
-        <p className="text-sm text-destructive">
-          {(allBooks.error as Error).message}
-        </p>
-      </div>
-    );
+    return <PageError error={allBooks.error} />;
   }
 
   return (
@@ -279,7 +257,7 @@ export function AdminBooksPage() {
                 </div>
               </TableCell>
               <TableCell className="hidden tabular-nums text-right text-sm text-muted-foreground sm:table-cell">
-                {b.totalReadTime > 0 ? formatReadTime(b.totalReadTime) : '—'}
+                {b.totalReadTime > 0 ? formatDuration(b.totalReadTime) : '—'}
               </TableCell>
               <TableCell className="hidden text-right text-sm text-muted-foreground md:table-cell">
                 {formatLastOpen(b.lastOpen)}
@@ -315,21 +293,12 @@ export function AdminBooksPage() {
 
       <Dialog.Root open={hiddenListOpen} onOpenChange={setHiddenListOpen}>
         <Dialog.Portal>
-          <Dialog.Backdrop
-            className={cn(
-              'fixed inset-0 z-[60] bg-black/45 backdrop-blur-[2px]',
-              'transition-opacity duration-200',
-              'data-[starting-style]:opacity-0 data-[ending-style]:opacity-0',
-            )}
-          />
+          <Dialog.Backdrop className={cn(DIALOG_BACKDROP_CLASS, 'z-[60]')} />
           <Dialog.Viewport className="fixed inset-0 z-[60] grid place-items-center p-4">
             <Dialog.Popup
               className={cn(
-                'flex max-h-[min(85vh,640px)] w-full max-w-lg flex-col overflow-hidden rounded-xl border border-border/80 bg-card text-card-foreground shadow-lg',
-                'ring-1 ring-foreground/[0.07] dark:ring-white/[0.04]',
-                'outline-none transition-transform duration-200',
-                'data-[starting-style]:scale-[0.98] data-[starting-style]:opacity-0',
-                'data-[ending-style]:scale-[0.98] data-[ending-style]:opacity-0',
+                DIALOG_POPUP_CLASS,
+                'z-[60] flex max-h-[min(85vh,640px)] max-w-lg flex-col overflow-hidden',
               )}
             >
               <div className="shrink-0 border-b border-border/60 px-5 py-4">

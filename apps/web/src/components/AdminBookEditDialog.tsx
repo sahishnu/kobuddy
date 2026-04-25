@@ -8,8 +8,9 @@ import { Button, buttonVariants } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
+import { DIALOG_BACKDROP_CLASS, DIALOG_POPUP_CLASS } from '@/lib/dialog-styles';
+import type { BookListRow } from '@/lib/types';
 import { cn } from '@/lib/utils';
-import type { BookListRow } from '@/pages/BooksPage';
 
 type CoverCandidate = {
   provider: 'openlibrary' | 'googlebooks';
@@ -268,21 +269,12 @@ export function AdminBookEditDialog({
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
-        <Dialog.Backdrop
-          className={cn(
-            'fixed inset-0 z-[70] bg-black/45 backdrop-blur-[2px]',
-            'transition-opacity duration-200',
-            'data-[starting-style]:opacity-0 data-[ending-style]:opacity-0',
-          )}
-        />
+        <Dialog.Backdrop className={cn(DIALOG_BACKDROP_CLASS, 'z-[70]')} />
         <Dialog.Viewport className="fixed inset-0 z-[70] grid place-items-center p-4">
           <Dialog.Popup
             className={cn(
-              'flex max-h-[min(90vh,720px)] w-full max-w-lg flex-col overflow-hidden rounded-xl border border-border/80 bg-card text-card-foreground shadow-lg',
-              'ring-1 ring-foreground/[0.07] dark:ring-white/[0.04]',
-              'outline-none transition-transform duration-200',
-              'data-[starting-style]:scale-[0.98] data-[starting-style]:opacity-0',
-              'data-[ending-style]:scale-[0.98] data-[ending-style]:opacity-0',
+              DIALOG_POPUP_CLASS,
+              'z-[70] flex max-h-[min(90vh,720px)] max-w-lg flex-col overflow-hidden',
             )}
           >
             <div className="shrink-0 border-b border-border/60 px-5 py-4">

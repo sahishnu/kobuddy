@@ -4,18 +4,19 @@ import { useQuery } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 import { useMemo } from 'react';
 import { AppFooterBentoSlot } from '@/components/AppFooter';
-import { Spinner } from '@/components/ui/spinner';
+import { PageError } from '@/components/PageError';
+import { PageSpinner } from '@/components/PageSpinner';
+import { formatDuration } from '@/lib/format';
+import type { BookListRow } from '@/lib/types';
 import { apiJson } from '../api';
 import { BentoCard } from '../components/BentoCard';
 import { BookshelfRow, type ShelfBook } from '../components/BookshelfRow';
 import { CurrentBookCard } from '../components/CurrentBookCard';
 import { HourlyReadingChart } from '../components/HourlyReadingChart';
-
 import { ReadingHeatmap } from '../components/ReadingHeatmap';
 import { StreakCard } from '../components/StreakCard';
 import { WeekPagesCard } from '../components/WeekPagesCard';
 import { YearGoalCard } from '../components/YearGoalCard';
-import type { BookListRow } from './BooksPage';
 
 const nookGradient = (id: string): ReactNode => (
   <linearGradient id={id} x1="0%" y1="0%" x2="100%" y2="0%">
@@ -24,15 +25,6 @@ const nookGradient = (id: string): ReactNode => (
     <stop offset="100%" stopColor="oklch(0.55 0.12 280)" />
   </linearGradient>
 );
-
-function formatLifetimeReadingTime(totalSeconds: number): string {
-  if (totalSeconds < 60) return `${Math.round(totalSeconds)}s`;
-  const h = Math.floor(totalSeconds / 3600);
-  const m = Math.floor((totalSeconds % 3600) / 60);
-  if (h === 0) return `${m} min`;
-  if (m === 0) return `${h}h`;
-  return `${h}h ${m}m`;
-}
 
 export function HomePage() {
   const timeZone = useMemo(
@@ -61,21 +53,11 @@ export function HomePage() {
   });
 
   if (stats.isLoading) {
-    return (
-      <div className="flex justify-center p-10">
-        <Spinner className="size-6 text-muted-foreground" />
-      </div>
-    );
+    return <PageSpinner />;
   }
 
   if (stats.isError) {
-    return (
-      <div className="space-y-3 p-6">
-        <p className="text-sm text-destructive">
-          {(stats.error as Error).message}
-        </p>
-      </div>
-    );
+    return <PageError error={stats.error} />;
   }
 
   const s = stats.data;
@@ -102,7 +84,9 @@ export function HomePage() {
         <div className="col-span-12 grid grid-cols-2 gap-2.5 sm:grid-cols-3 md:gap-3">
           <BentoCard title="Reading Time">
             <p className="font-heading text-2xl tracking-tight md:text-3xl">
-              {formatLifetimeReadingTime(s.totalReadingTimeSeconds)}
+              {formatDuration(s.totalReadingTimeSeconds, {
+                includeSeconds: true,
+              })}
             </p>
             <p className="text-xs text-muted-foreground">Lifetime total</p>
           </BentoCard>
