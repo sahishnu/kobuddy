@@ -120,9 +120,7 @@ export function WeekPagesCard({ weekDailyReading, className }: Props) {
                                 height: hgt,
                                 backgroundColor:
                                   val > 0
-                                    ? isToday
-                                      ? 'var(--color-reading)'
-                                      : 'color-mix(in oklab, var(--color-reading) 55%, var(--card))'
+                                    ? 'var(--color-reading)'
                                     : 'color-mix(in oklab, var(--muted-foreground) 35%, var(--card))',
                               }}
                               aria-label={tip}

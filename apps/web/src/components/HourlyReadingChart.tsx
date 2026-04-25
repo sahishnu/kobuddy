@@ -70,9 +70,7 @@ export function HourlyReadingChart({
                             height: hgt,
                             backgroundColor:
                               mins > 0
-                                ? isPeak
-                                  ? 'var(--color-reading)'
-                                  : 'color-mix(in oklab, var(--color-reading) 55%, var(--card))'
+                                ? 'var(--color-reading)'
                                 : 'color-mix(in oklab, var(--muted-foreground) 35%, var(--card))',
                           }}
                           aria-label={tip}
