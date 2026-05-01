@@ -41,6 +41,17 @@ export type WeekDayReading = {
   minutes: number;
 };
 
+/** Per-book reading stats for `GET /api/stats/:md5` (visible books only). */
+export type StatsByBook = {
+  bookMd5: string;
+  totalReadingTimeSeconds: number;
+  perMonth: PerMonthReadingTime[];
+  perDayOfTheWeek: PerDayOfTheWeek[];
+  calendar: CalendarDay[];
+  /** IANA timezone used for per-month, weekday, and calendar fields. */
+  statsTimeZone: string;
+};
+
 export type StatsOverview = {
   totalReadingTimeSeconds: number;
   totalPagesRead: number;

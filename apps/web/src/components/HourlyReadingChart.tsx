@@ -7,7 +7,6 @@ import { BentoCard } from './BentoCard';
 
 type Props = {
   averageMinutesByHour: number[];
-  peakHour: number;
   personaLabel: string;
   personaDetail: string;
 };
@@ -21,7 +20,6 @@ for (let h = 0; h < 24; h++) {
 
 export function HourlyReadingChart({
   averageMinutesByHour,
-  peakHour: peakHourIndex,
   personaLabel,
   personaDetail,
 }: Props) {

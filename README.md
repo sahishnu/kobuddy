@@ -13,7 +13,7 @@ This project was bootstrapped as a **sibling** to [KoInsight](https://github.com
 docker compose up --build -d
 ```
 
-3. Open `http://localhost:3000` for the dashboard, `http://localhost:3000/api/docs` for API docs, and download the plugin from `http://localhost:3000/plugin.zip`.
+1. Open `http://localhost:3000` for the dashboard, `http://localhost:3000/api/docs` for API docs, and download the plugin from `http://localhost:3000/plugin.zip`.
 
 ## Prerequisites
 
@@ -27,6 +27,8 @@ cp .env.example .env
 # edit .env — secrets must satisfy length checks in apps/server/src/config.ts
 pnpm dev
 ```
+
+If the API crashes with **`Could not locate the bindings file`** (better-sqlite3), the native addon was not built. From the repo root run **`pnpm rebuild:sqlite`** (or **`pnpm --filter @kobuddy/server rebuild better-sqlite3`**). A normal **`pnpm install`** runs this automatically via `postinstall`. On macOS, compiling may require **Xcode Command Line Tools** (`xcode-select --install`) if no prebuilt binary exists for your Node/OS pair.
 
 Keep `.env` at the **repository root** (next to `package.json`). The server resolves it even when Turbo runs it with cwd `apps/server`.
 
@@ -44,18 +46,20 @@ The plugin reads `KOReader/settings/statistics.sqlite3` (same layout KoInsight u
 
 ## Auth
 
-- **Device → server**: `Authorization: Bearer <INGEST_TOKEN>` on `/api/ingest/*` POST routes.
+- **Device → server**: `Authorization: Bearer <INGEST_TOKEN>` on `/api/ingest/`* POST routes.
 - **Browser admin**: `POST /api/auth/login` with JSON `{ "password": "<ADMIN_PASSWORD>" }` sets an encrypted cookie (`iron-session`). Mutations (covers, auto ISBN, hide book, edit metadata) require that session. Set `PUBLIC_READ=false` to require login for `GET /api/books` and `GET /api/stats` as well.
 
 ## Layout
 
-| Path | Role |
-|------|------|
-| `apps/server` | Hono API, SQLite + Drizzle, serves `apps/web/dist` in production |
-| `apps/web` | React + Mantine dashboard |
-| `packages/db` | Drizzle schema + SQL migrations |
-| `packages/common` | Shared Zod ingest schemas + stats DTO types |
-| `plugin/kobuddy.koplugin` | Lua plugin (zipped by `/plugin.zip`) |
+
+| Path                      | Role                                                             |
+| ------------------------- | ---------------------------------------------------------------- |
+| `apps/server`             | Hono API, SQLite + Drizzle, serves `apps/web/dist` in production |
+| `apps/web`                | React + Mantine dashboard                                        |
+| `packages/db`             | Drizzle schema + SQL migrations                                  |
+| `packages/common`         | Shared Zod ingest schemas + stats DTO types                      |
+| `plugin/kobuddy.koplugin` | Lua plugin (zipped by `/plugin.zip`)                             |
+
 
 ## License
 

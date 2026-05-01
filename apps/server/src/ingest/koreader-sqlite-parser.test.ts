@@ -3,7 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import Database from 'better-sqlite3';
 import { describe, expect, it } from 'vitest';
-import { parseKoreaderStatisticsSqlite } from './koreader-statistics-sqlite.js';
+import { parseKoreaderStatisticsSqlite } from './koreader-sqlite-parser.js';
 
 describe('parseKoreaderStatisticsSqlite', () => {
   it('reads book and page_stat_data like the KOReader plugin', () => {

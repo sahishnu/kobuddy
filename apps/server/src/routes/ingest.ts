@@ -3,18 +3,17 @@ import { devicePayloadSchema, ingestPayloadSchema } from '@kobuddy/common';
 import { type Context, Hono } from 'hono';
 import type { z } from 'zod';
 import type { AppConfig } from '../config.js';
+import {
+  deviceIdFromMultipartField,
+  ingestFromJson,
+  ingestFromKoreaderSqlite,
+  registerDevice,
+} from '../ingest/index.js';
 import { clientIp } from '../lib/client-ip.js';
 import type { DbClient } from '../lib/db.js';
 import { ingestLog } from '../lib/logger.js';
 import { requireIngestToken } from '../middleware/require-bearer.js';
-import {
-  ingestReadingData,
-  registerDevice,
-} from '../services/ingest-service.js';
-import {
-  deviceIdFromMultipartField,
-  importStatisticsSqliteFromUpload,
-} from '../services/sqlite-statistics-import.js';
+import { invalidateStatsCache } from '../stats/index.js';
 
 function withPluginVersion<T extends z.ZodType>(cfg: AppConfig, schema: T) {
   return schema.superRefine((val, ctx) => {
@@ -45,7 +44,7 @@ type ValidatorIssue = {
  */
 function logValidationIssues(route: string) {
   // biome-ignore lint/suspicious/noExplicitAny: hook type is generic over the parsed schema
-  return (result: any, c: Context): Response | void => {
+  return (result: any, c: Context): Response | undefined => {
     if (result?.success) return;
     const issues: ValidatorIssue[] = result?.error?.issues ?? [];
     ingestLog.warn(
@@ -85,6 +84,7 @@ export function ingestRouter(cfg: AppConfig, db: DbClient) {
       const body = c.req.valid('json');
       try {
         await registerDevice(db, body.id, body.model);
+        await invalidateStatsCache(db);
       } catch (e) {
         ingestLog.error(
           {
@@ -121,8 +121,11 @@ export function ingestRouter(cfg: AppConfig, db: DbClient) {
     zValidator('json', importBody, logValidationIssues('/import')),
     async (c) => {
       const body = c.req.valid('json');
+      let pageStatsFiltered: number | undefined;
       try {
-        ingestReadingData(db, body.books, body.stats);
+        const r = ingestFromJson(db, body.books, body.stats);
+        pageStatsFiltered = r.pageStatsFiltered;
+        await invalidateStatsCache(db);
       } catch (e) {
         ingestLog.error(
           {
@@ -130,6 +133,7 @@ export function ingestRouter(cfg: AppConfig, db: DbClient) {
             ip: clientIp(c),
             bookCount: body.books.length,
             statCount: body.stats.length,
+            pageStatsFiltered,
             err:
               e instanceof Error ? { message: e.message, stack: e.stack } : e,
           },
@@ -146,6 +150,7 @@ export function ingestRouter(cfg: AppConfig, db: DbClient) {
           ip: clientIp(c),
           bookCount: body.books.length,
           statCount: body.stats.length,
+          pageStatsFiltered: pageStatsFiltered ?? 0,
           pluginVersion: body.version,
         },
         'reading data ingested',
@@ -166,7 +171,8 @@ export function ingestRouter(cfg: AppConfig, db: DbClient) {
         return c.json({ error: 'Expected multipart field "file"' }, 400);
       }
       const deviceId = deviceIdFromMultipartField(body.device_id);
-      const result = await importStatisticsSqliteFromUpload(db, file, deviceId);
+      const result = await ingestFromKoreaderSqlite(db, file, deviceId);
+      await invalidateStatsCache(db);
       ingestLog.info(
         {
           route: '/import-sqlite',
@@ -174,6 +180,7 @@ export function ingestRouter(cfg: AppConfig, db: DbClient) {
           deviceId,
           booksImported: result.booksImported,
           pageStatsImported: result.pageStatsImported,
+          pageStatsFiltered: result.pageStatsFiltered,
         },
         'sqlite statistics imported',
       );
@@ -181,6 +188,7 @@ export function ingestRouter(cfg: AppConfig, db: DbClient) {
         message: 'Upload successful',
         booksImported: result.booksImported,
         pageStatsImported: result.pageStatsImported,
+        pageStatsFiltered: result.pageStatsFiltered,
       });
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Import failed';

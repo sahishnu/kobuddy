@@ -1,8 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  normalizeIsbnForStorage,
-  pickPrimaryIsbnFromList,
-} from './cover-lookup-service.js';
+import { normalizeIsbnForStorage, pickPrimaryIsbnFromList } from './isbn.js';
 
 describe('normalizeIsbnForStorage', () => {
   it('accepts ISBN-13', () => {

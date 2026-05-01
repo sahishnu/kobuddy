@@ -26,7 +26,6 @@ function formatTotal(minutes: number): string {
 
 export function WeekPagesCard({ weekDailyReading, className }: Props) {
   const [mode, setMode] = useState<'pages' | 'minutes'>('pages');
-  const todayDow = new Date().getDay() || 7;
 
   const totalPages = weekDailyReading.reduce((s, d) => s + d.pages, 0);
   const totalMinutes = weekDailyReading.reduce((s, d) => s + d.minutes, 0);
@@ -102,7 +101,6 @@ export function WeekPagesCard({ weekDailyReading, className }: Props) {
                 {weekDailyReading.map((day) => {
                   const val = mode === 'pages' ? day.pages : day.minutes;
                   const hgt = Math.max(2, (val / max) * barH);
-                  const isToday = day.dow === todayDow;
                   const tip = `${day.label} · ${val} ${mode === 'pages' ? 'pages' : 'min'}`;
                   return (
                     <div

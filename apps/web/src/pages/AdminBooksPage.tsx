@@ -1,4 +1,5 @@
 import { Dialog } from '@base-ui/react/dialog';
+import type { BookListItem } from '@kobuddy/common';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { EyeOff, Pencil, Search } from 'lucide-react';
@@ -21,7 +22,6 @@ import {
 import { DIALOG_BACKDROP_CLASS, DIALOG_POPUP_CLASS } from '@/lib/dialog-styles';
 import { formatDuration } from '@/lib/format';
 import { useMe } from '@/lib/hooks';
-import type { BookListRow } from '@/lib/types';
 import { cn } from '@/lib/utils';
 import { apiJson } from '../api';
 
@@ -47,7 +47,7 @@ export function AdminBooksPage() {
   const allBooks = useQuery({
     queryKey: ['books', 'admin', 'lastOpen', 'showHidden'],
     queryFn: () =>
-      apiJson<BookListRow[]>(
+      apiJson<BookListItem[]>(
         `/api/books?${new URLSearchParams({
           sort: 'lastOpen',
           showHidden: 'true',

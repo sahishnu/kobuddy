@@ -2,17 +2,20 @@ import type { KoreaderBook, PageStatPayload } from '@kobuddy/common';
 import { book, bookDevice, device, pageStat } from '@kobuddy/db/schema';
 import { sql } from 'drizzle-orm';
 import type { DbClient } from '../lib/db.js';
-import { invalidateStatsCache } from '../stats/stats-cache.js';
+import { parseKoreaderStatisticsSqlite } from './koreader-sqlite-parser.js';
 
 export const UNKNOWN_DEVICE_ID = 'unknown-device';
 
-/** better-sqlite3 transactions must be synchronous — async callbacks throw. */
-export function ingestReadingData(
-  db: DbClient,
-  booksToImport: KoreaderBook[],
+export type IngestResult = {
+  booksImported: number;
+  pageStatsImported: number;
+  pageStatsFiltered: number;
+};
+
+function filterSafePageStats(
   newPageStats: PageStatPayload[],
-) {
-  const safePageStats = newPageStats.filter(
+): PageStatPayload[] {
+  return newPageStats.filter(
     (s) =>
       s != null &&
       typeof s === 'object' &&
@@ -21,6 +24,17 @@ export function ingestReadingData(
       Number.isFinite(s.total_pages) &&
       s.total_pages > 0,
   );
+}
+
+/** better-sqlite3 transactions must be synchronous — async callbacks throw. */
+export function ingestFromJson(
+  db: DbClient,
+  booksToImport: KoreaderBook[],
+  newPageStats: PageStatPayload[],
+): IngestResult {
+  const rawStatCount = newPageStats.length;
+  const safePageStats = filterSafePageStats(newPageStats);
+  const pageStatsFiltered = rawStatCount - safePageStats.length;
 
   const firstDevice = safePageStats.find((s) => s.device_id)?.device_id;
   const deviceId = firstDevice ?? UNKNOWN_DEVICE_ID;
@@ -80,7 +94,7 @@ export function ingestReadingData(
     if (safePageStats.length > 0) {
       const rows = safePageStats.map((s) => ({
         bookMd5: s.book_md5,
-        deviceId: s.device_id ?? deviceId,
+        deviceId,
         page: s.page,
         startTime: s.start_time,
         duration: s.duration,
@@ -105,7 +119,30 @@ export function ingestReadingData(
     }
   });
 
-  invalidateStatsCache(db).catch(() => {});
+  return {
+    booksImported: booksToImport.length,
+    pageStatsImported: safePageStats.length,
+    pageStatsFiltered,
+  };
+}
+
+export async function ingestFromKoreaderSqlite(
+  db: DbClient,
+  file: File,
+  deviceId: string,
+): Promise<IngestResult> {
+  const buf = Buffer.from(await file.arrayBuffer());
+  const { books, stats } = parseKoreaderStatisticsSqlite(buf, deviceId);
+  return ingestFromJson(db, books, stats);
+}
+
+/** Optional multipart field `device_id` — labels page stats (KOReader plugin uses hardware id). */
+export function deviceIdFromMultipartField(raw: unknown): string {
+  if (typeof raw === 'string') {
+    const s = raw.trim().slice(0, 256);
+    if (s.length > 0) return s;
+  }
+  return UNKNOWN_DEVICE_ID;
 }
 
 export async function registerDevice(db: DbClient, id: string, model: string) {

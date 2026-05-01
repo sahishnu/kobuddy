@@ -1,4 +1,4 @@
-import type { StatsOverview } from '@kobuddy/common';
+import type { BookListItem, StatsOverview } from '@kobuddy/common';
 import { Letters } from '@kumailnanji/letters';
 import { useQuery } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
@@ -7,7 +7,6 @@ import { AppFooterBentoSlot } from '@/components/AppFooter';
 import { PageError } from '@/components/PageError';
 import { PageSpinner } from '@/components/PageSpinner';
 import { formatDuration } from '@/lib/format';
-import type { BookListRow } from '@/lib/types';
 import { apiJson } from '../api';
 import { BentoCard } from '../components/BentoCard';
 import { BookshelfRow, type ShelfBook } from '../components/BookshelfRow';
@@ -43,7 +42,7 @@ export function HomePage() {
   const shelf = useQuery({
     queryKey: ['books', 'shelf'],
     queryFn: () =>
-      apiJson<BookListRow[]>(
+      apiJson<BookListItem[]>(
         `/api/books?${new URLSearchParams({
           sort: 'lastOpen',
           limit: '8',
@@ -193,7 +192,6 @@ export function HomePage() {
           <div className="min-h-0 md:col-span-7">
             <HourlyReadingChart
               averageMinutesByHour={s.hourlyReading.averageMinutesByHour}
-              peakHour={s.hourlyReading.peakHour}
               personaLabel={s.hourlyReading.personaLabel}
               personaDetail={s.hourlyReading.personaDetail}
             />

@@ -1,4 +1,9 @@
 import { Dialog } from '@base-ui/react/dialog';
+import type {
+  BookListItem,
+  CoverCandidate,
+  IsbnCandidate,
+} from '@kobuddy/common';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Barcode, ImageIcon, Trash2, Wand2 } from 'lucide-react';
 import { useEffect, useId, useState } from 'react';
@@ -9,29 +14,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
 import { DIALOG_BACKDROP_CLASS, DIALOG_POPUP_CLASS } from '@/lib/dialog-styles';
-import type { BookListRow } from '@/lib/types';
 import { cn } from '@/lib/utils';
 
-type CoverCandidate = {
-  provider: 'openlibrary' | 'googlebooks';
-  providerId: string;
-  title: string;
-  authors: string;
-  year?: number;
-  thumbnailUrl?: string;
-};
-
-type IsbnCandidate = {
-  provider: 'openlibrary' | 'googlebooks';
-  providerId: string;
-  title: string;
-  authors: string;
-  year?: number;
-  isbn: string;
-};
-
 type AdminBookEditDialogProps = {
-  book: BookListRow | null;
+  book: BookListItem | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 };

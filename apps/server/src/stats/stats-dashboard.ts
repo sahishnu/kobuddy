@@ -1,5 +1,5 @@
 import type { CalendarDay, WeekDayReading } from '@kobuddy/common';
-import type { StatRow } from './stats-service.js';
+import type { StatRow } from './aggregates.js';
 import {
   isoWeekYearAndWeek,
   localHour,

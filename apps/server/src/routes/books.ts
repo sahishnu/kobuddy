@@ -1,35 +1,36 @@
 import { zValidator } from '@hono/zod-validator';
-import { book, bookDevice, pageStat } from '@kobuddy/db/schema';
-import { and, asc, desc, eq, ne, sql } from 'drizzle-orm';
+import type { BookDetail, BookListItem } from '@kobuddy/common';
+import { book } from '@kobuddy/db/schema';
+import { eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
+import {
+  getBook,
+  listBooks,
+  setBookHidden,
+  updateBook,
+} from '../books/index.js';
 import type { AppConfig } from '../config.js';
+import {
+  applyCoverCandidate,
+  applyCustomCover,
+  autoCoverAfterIsbnChange,
+  deleteCover,
+  listCoverCandidates,
+  listIsbnCandidates,
+  normalizeIsbnForStorage,
+  readCoverBytes,
+} from '../covers/index.js';
+import {
+  deviceIdFromMultipartField,
+  ingestFromKoreaderSqlite,
+} from '../ingest/index.js';
 import type { DbClient } from '../lib/db.js';
 import { displayTitle } from '../lib/display.js';
 import { requireAdmin } from '../middleware/require-admin.js';
 import { requirePublicReadOrAdmin } from '../middleware/require-public-or-admin.js';
 import type { AppEnv } from '../middleware/session.js';
-import {
-  normalizeIsbnForStorage,
-  searchCoverCandidates,
-  searchIsbnCandidates,
-} from '../services/cover-lookup-service.js';
-import {
-  autoFetchCover,
-  deleteCoverFile,
-  readCoverFile,
-  saveCoverFile,
-  tryAutoCoverAfterIsbnUpdate,
-} from '../services/cover-service.js';
-import {
-  deviceIdFromMultipartField,
-  importStatisticsSqliteFromUpload,
-} from '../services/sqlite-statistics-import.js';
-import {
-  loadBookDeviceAggregates,
-  pickCurrentReadingBookMd5,
-  SHELF_MIN_READ_PAGES,
-} from '../stats/book-device-aggregates.js';
+import { invalidateStatsCache } from '../stats/index.js';
 
 const hideBody = z.object({ hidden: z.boolean() });
 
@@ -55,7 +56,10 @@ export function booksRouter(cfg: AppConfig, db: DbClient) {
   const r = new Hono<AppEnv>();
 
   r.get('/', requirePublicReadOrAdmin(cfg), async (c) => {
-    const showHidden = c.req.query('showHidden') === 'true';
+    const session = c.get('session');
+    const showHidden = Boolean(
+      session.isAdmin && c.req.query('showHidden') === 'true',
+    );
     const sort = c.req.query('sort');
     const shelfMode = c.req.query('shelf') === 'true';
     const limitRaw = c.req.query('limit');
@@ -65,91 +69,17 @@ export function booksRouter(cfg: AppConfig, db: DbClient) {
         ? Math.min(100, limitParsed)
         : undefined;
 
-    let excludeCurrentMd5: string | null = null;
-    if (shelfMode) {
-      const aggs = await loadBookDeviceAggregates(db);
-      excludeCurrentMd5 = pickCurrentReadingBookMd5(aggs);
-    }
-
-    const lastOpenAgg =
-      sql<number>`max(coalesce(${bookDevice.lastOpen}, 0))`.mapWith(Number);
-    const maxReadAgg = sql<number>`max(${bookDevice.totalReadPages})`.mapWith(
-      Number,
-    );
-    const maxPagesAgg = sql<number>`max(${bookDevice.pages})`.mapWith(Number);
-
-    const whereParts = [];
-    if (!showHidden) whereParts.push(eq(book.hidden, false));
-    if (shelfMode && excludeCurrentMd5) {
-      whereParts.push(ne(book.md5, excludeCurrentMd5));
-    }
-    const whereClause = and(...whereParts) ?? sql`true`;
-
-    let q = db
-      .select({
-        md5: book.md5,
-        title: book.title,
-        customTitle: book.customTitle,
-        authors: book.authors,
-        series: book.series,
-        language: book.language,
-        isbn: book.isbn,
-        hidden: book.hidden,
-        completedAt: book.completedAt,
-        coverPath: book.coverPath,
-        coverSource: book.coverSource,
-        lastOpen: sql<number>`max(${bookDevice.lastOpen})`.mapWith(Number),
-        totalReadTime:
-          sql<number>`coalesce(sum(${bookDevice.totalReadTime}), 0)`.mapWith(
-            Number,
-          ),
-        totalReadPages:
-          sql<number>`coalesce(max(${bookDevice.totalReadPages}), 0)`.mapWith(
-            Number,
-          ),
-        pages: sql<number>`coalesce(max(${bookDevice.pages}), 0)`.mapWith(
-          Number,
-        ),
-        percentComplete:
-          sql<number>`coalesce(max(case when ${bookDevice.pages} > 0 then ${bookDevice.totalReadPages} * 100 / ${bookDevice.pages} else 0 end), 0)`.mapWith(
-            Number,
-          ),
-      })
-      .from(book)
-      .leftJoin(bookDevice, eq(bookDevice.bookMd5, book.md5))
-      .where(whereClause)
-      .groupBy(book.md5)
-      .$dynamic();
-
-    if (shelfMode) {
-      q = q.having(
-        sql`(${maxReadAgg} >= ${SHELF_MIN_READ_PAGES} OR (${maxPagesAgg} > 0 AND ${maxReadAgg} >= ${maxPagesAgg}))`,
-      );
-    }
-
-    if (sort === 'lastOpen') {
-      q = q.orderBy(desc(lastOpenAgg), book.md5);
-    } else {
-      q = q.orderBy(
-        asc(sql`lower(coalesce(${book.title}, ${book.customTitle}, ''))`),
-        book.md5,
-      );
-    }
-
-    if (limit != null) {
-      q = q.limit(limit);
-    }
-
-    const rows = await q;
-
-    return c.json(
-      rows.map((b) => ({
-        ...b,
-        completed: b.completedAt != null,
-        displayTitle: displayTitle(b),
-        coverUrl: b.coverPath ? `/api/books/${b.md5}/cover` : null,
-      })),
-    );
+    const core = await listBooks(db, {
+      showHidden,
+      sort: sort === 'lastOpen' ? 'lastOpen' : undefined,
+      shelfMode,
+      limit,
+    });
+    const list: BookListItem[] = core.map((b) => ({
+      ...b,
+      coverUrl: b.coverPath ? `/api/books/${b.md5}/cover` : null,
+    }));
+    return c.json(list);
   });
 
   r.post('/import-sqlite', requireAdmin, async (c) => {
@@ -160,12 +90,14 @@ export function booksRouter(cfg: AppConfig, db: DbClient) {
         return c.json({ error: 'Expected multipart field "file"' }, 400);
       }
       const deviceId = deviceIdFromMultipartField(body.device_id);
-      const result = await importStatisticsSqliteFromUpload(db, file, deviceId);
+      const result = await ingestFromKoreaderSqlite(db, file, deviceId);
+      await invalidateStatsCache(db);
       return c.json({
         ok: true,
         message: 'Import successful',
         booksImported: result.booksImported,
         pageStatsImported: result.pageStatsImported,
+        pageStatsFiltered: result.pageStatsFiltered,
       });
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Import failed';
@@ -182,12 +114,7 @@ export function booksRouter(cfg: AppConfig, db: DbClient) {
     const q = c.req.query('q');
     const title = q || displayTitle(b);
     const authors = b.authors ?? '';
-    const candidates = await searchCoverCandidates(
-      title,
-      authors,
-      b.isbn,
-      cfg.GOOGLE_BOOKS_API_KEY,
-    );
+    const candidates = await listCoverCandidates(cfg, title, authors, b.isbn);
     return c.json({ candidates });
   });
 
@@ -215,16 +142,16 @@ export function booksRouter(cfg: AppConfig, db: DbClient) {
           thumbnailUrl: body.thumbnailUrl,
         };
       } else {
-        const candidates = await searchCoverCandidates(
+        const candidates = await listCoverCandidates(
+          cfg,
           displayTitle(b),
           b.authors ?? '',
           b.isbn,
-          cfg.GOOGLE_BOOKS_API_KEY,
         );
         candidate = candidates[0] ?? null;
       }
       if (!candidate) return c.json({ error: 'No cover found' }, 404);
-      const ok = await autoFetchCover(db, cfg, md5, candidate);
+      const ok = await applyCoverCandidate(db, cfg, md5, candidate);
       if (!ok) return c.json({ error: 'Download failed' }, 502);
       return c.json({
         ok: true,
@@ -237,7 +164,7 @@ export function booksRouter(cfg: AppConfig, db: DbClient) {
     const md5 = c.req.param('md5');
     const [b] = await db.select().from(book).where(eq(book.md5, md5)).limit(1);
     if (!b?.coverPath) return c.body(null, 404);
-    const buf = await readCoverFile(cfg, b.coverPath);
+    const buf = await readCoverBytes(cfg, b.coverPath);
     if (!buf) return c.body(null, 404);
     return new Response(buf, {
       headers: {
@@ -257,13 +184,13 @@ export function booksRouter(cfg: AppConfig, db: DbClient) {
     const maxBytes = cfg.MAX_COVER_MB * 1024 * 1024;
     const buf = Buffer.from(await file.arrayBuffer());
     if (buf.length > maxBytes) return c.json({ error: 'File too large' }, 400);
-    await saveCoverFile(db, cfg, md5, buf, 'manual');
+    await applyCustomCover(db, cfg, md5, buf);
     return c.json({ ok: true });
   });
 
   r.delete('/:md5/cover', requireAdmin, async (c) => {
     const md5 = c.req.param('md5');
-    await deleteCoverFile(db, cfg, md5);
+    await deleteCover(db, cfg, md5);
     return c.json({ ok: true });
   });
 
@@ -276,11 +203,7 @@ export function booksRouter(cfg: AppConfig, db: DbClient) {
     const q = c.req.query('q');
     const title = q || displayTitle(b);
     const authors = b.authors ?? '';
-    const candidates = await searchIsbnCandidates(
-      title,
-      authors,
-      cfg.GOOGLE_BOOKS_API_KEY,
-    );
+    const candidates = await listIsbnCandidates(cfg, title, authors);
     return c.json({ candidates });
   });
 
@@ -304,10 +227,10 @@ export function booksRouter(cfg: AppConfig, db: DbClient) {
         nextIsbn = normalizeIsbnForStorage(body.isbn);
         if (!nextIsbn) return c.json({ error: 'Invalid ISBN' }, 400);
       } else {
-        const list = await searchIsbnCandidates(
+        const list = await listIsbnCandidates(
+          cfg,
           displayTitle(existing),
           existing.authors ?? '',
-          cfg.GOOGLE_BOOKS_API_KEY,
         );
         const first = list[0];
         if (!first) return c.json({ error: 'No ISBN found' }, 404);
@@ -315,7 +238,7 @@ export function booksRouter(cfg: AppConfig, db: DbClient) {
       }
 
       await db.update(book).set({ isbn: nextIsbn }).where(eq(book.md5, md5));
-      await tryAutoCoverAfterIsbnUpdate(db, cfg, md5, hadManualCover, nextIsbn);
+      await autoCoverAfterIsbnChange(db, cfg, md5, hadManualCover, nextIsbn);
       return c.json({ ok: true, isbn: nextIsbn });
     },
   );
@@ -325,32 +248,35 @@ export function booksRouter(cfg: AppConfig, db: DbClient) {
   r.put('/:md5/hide', requireAdmin, zValidator('json', hideBody), async (c) => {
     const md5 = c.req.param('md5');
     const { hidden } = c.req.valid('json');
-    await db.update(book).set({ hidden }).where(eq(book.md5, md5));
+    await setBookHidden(db, md5, hidden);
     return c.json({ ok: true });
   });
 
   r.get('/:md5', requirePublicReadOrAdmin(cfg), async (c) => {
     const md5 = c.req.param('md5');
-    const [b] = await db.select().from(book).where(eq(book.md5, md5)).limit(1);
-    if (!b) return c.json({ error: 'Not found' }, 404);
-    const devices = await db
-      .select()
-      .from(bookDevice)
-      .where(eq(bookDevice.bookMd5, md5));
-    const stats = await db
-      .select()
-      .from(pageStat)
-      .where(eq(pageStat.bookMd5, md5))
-      .orderBy(desc(pageStat.startTime))
-      .limit(5000);
+    const out = await getBook(db, md5);
+    if (!out) return c.json({ error: 'Not found' }, 404);
+    const { book: bk, devices, pageStats } = out;
+    const bookOut: BookDetail = {
+      md5: bk.md5,
+      title: bk.title,
+      customTitle: bk.customTitle,
+      authors: bk.authors,
+      series: bk.series,
+      language: bk.language,
+      isbn: bk.isbn,
+      hidden: bk.hidden,
+      completedAt: bk.completedAt,
+      coverPath: bk.coverPath,
+      coverSource: bk.coverSource,
+      createdAt: bk.createdAt.toISOString(),
+      displayTitle: bk.displayTitle,
+      coverUrl: bk.coverPath ? `/api/books/${bk.md5}/cover` : null,
+    };
     return c.json({
-      book: {
-        ...b,
-        displayTitle: displayTitle(b),
-        coverUrl: b.coverPath ? `/api/books/${b.md5}/cover` : null,
-      },
+      book: bookOut,
       devices,
-      pageStats: stats,
+      pageStats,
     });
   });
 
@@ -365,32 +291,19 @@ export function booksRouter(cfg: AppConfig, db: DbClient) {
         completedAt: completedAtOverride,
         ...rest
       } = c.req.valid('json');
-      const [existing] = await db
-        .select()
-        .from(book)
-        .where(eq(book.md5, md5))
-        .limit(1);
-      if (!existing) return c.json({ error: 'Not found' }, 404);
-      const patch: typeof rest & { completedAt?: number | null } = { ...rest };
-      if (completedAtOverride !== undefined) {
-        patch.completedAt = completedAtOverride;
-      } else if (completed === true && existing.completedAt == null) {
-        patch.completedAt = Math.floor(Date.now() / 1000);
-      } else if (completed === false) {
-        patch.completedAt = null;
-      }
-      await db.update(book).set(patch).where(eq(book.md5, md5));
-      const hadManualCover = existing.coverSource === 'manual';
-      const isbnChanged =
-        rest.isbn !== undefined && rest.isbn !== existing.isbn;
-      const newIsbn = rest.isbn ?? existing.isbn;
-      if (isbnChanged) {
-        await tryAutoCoverAfterIsbnUpdate(
+      const result = await updateBook(db, md5, {
+        ...rest,
+        completed,
+        completedAt: completedAtOverride,
+      });
+      if (!result.found) return c.json({ error: 'Not found' }, 404);
+      if (result.isbnChanged) {
+        await autoCoverAfterIsbnChange(
           db,
           cfg,
           md5,
-          hadManualCover,
-          newIsbn,
+          result.hadManualCover,
+          result.nextIsbn,
         );
       }
       return c.json({ ok: true });

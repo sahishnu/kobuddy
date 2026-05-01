@@ -13,7 +13,9 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      '/api': { target: 'https://books.sahi.sh', changeOrigin: true },
+      // Uncomment this to use the production API.
+      // '/api': { target: 'https://books.sahi.sh', changeOrigin: true },
+      '/api': { target: 'http://127.0.0.1:3000', changeOrigin: true },
       '/plugin.zip': { target: 'http://127.0.0.1:3000', changeOrigin: true },
     },
   },

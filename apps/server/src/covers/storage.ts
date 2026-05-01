@@ -4,14 +4,8 @@ import { book } from '@kobuddy/db/schema';
 import { eq } from 'drizzle-orm';
 import type { AppConfig } from '../config.js';
 import type { DbClient } from '../lib/db.js';
-import { displayTitle } from '../lib/display.js';
-import {
-  type CoverCandidate,
-  fetchCoverBytes,
-  searchCoverCandidates,
-} from './cover-lookup-service.js';
 
-function coverRelPath(md5: string): string {
+export function coverRelPath(md5: string): string {
   return `covers/${md5}.jpg`;
 }
 
@@ -66,43 +60,4 @@ export async function readCoverFile(
   } catch {
     return null;
   }
-}
-
-export async function autoFetchCover(
-  db: DbClient,
-  cfg: AppConfig,
-  md5: string,
-  candidate: CoverCandidate,
-): Promise<boolean> {
-  const bytes = await fetchCoverBytes(candidate, cfg.GOOGLE_BOOKS_API_KEY);
-  if (!bytes) return false;
-  await saveCoverFile(
-    db,
-    cfg,
-    md5,
-    bytes,
-    `${candidate.provider}:${candidate.providerId}`,
-  );
-  return true;
-}
-
-export async function tryAutoCoverAfterIsbnUpdate(
-  db: DbClient,
-  cfg: AppConfig,
-  md5: string,
-  hadManualCover: boolean,
-  newIsbn: string | null,
-): Promise<void> {
-  if (hadManualCover || !newIsbn) return;
-  const [b] = await db.select().from(book).where(eq(book.md5, md5)).limit(1);
-  if (!b?.isbn) return;
-  const candidates = await searchCoverCandidates(
-    displayTitle(b),
-    b.authors ?? '',
-    b.isbn,
-    cfg.GOOGLE_BOOKS_API_KEY,
-  );
-  const first = candidates[0];
-  if (!first) return;
-  await autoFetchCover(db, cfg, md5, first);
 }
