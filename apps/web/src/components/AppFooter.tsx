@@ -1,16 +1,14 @@
 import { AlertDialog } from '@base-ui/react/alert-dialog';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { Globe, LibraryBig, LogOut, Moon, Sun, Upload } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { apiJson } from '@/api';
 import { useAuthUi } from '@/auth-ui';
 import { BentoCard } from '@/components/BentoCard';
 import { ImportKoreaderModal } from '@/components/ImportKoreaderModal';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
 import { DIALOG_BACKDROP_CLASS, DIALOG_POPUP_CLASS } from '@/lib/dialog-styles';
-import { useMe } from '@/lib/hooks';
+import { useLogout, useMe } from '@/lib/hooks';
 import { cn } from '@/lib/utils';
 import { useTheme } from '@/theme/theme-provider';
 
@@ -21,7 +19,6 @@ type AppFooterContentProps = {
 };
 
 export function AppFooterContent({ className }: AppFooterContentProps) {
-  const queryClient = useQueryClient();
   const { theme, toggleTheme } = useTheme();
   const { openLoginModal } = useAuthUi();
   const [timeZone, setTimeZone] = useState<string | null>(null);
@@ -30,14 +27,7 @@ export function AppFooterContent({ className }: AppFooterContentProps) {
 
   const me = useMe();
 
-  const logout = useMutation({
-    mutationFn: () =>
-      apiJson<{ ok: boolean }>('/api/auth/logout', { method: 'POST' }),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['me'] });
-      setLogoutDialogOpen(false);
-    },
-  });
+  const logout = useLogout();
 
   useEffect(() => {
     setTimeZone(Intl.DateTimeFormat().resolvedOptions().timeZone);
@@ -152,7 +142,11 @@ export function AppFooterContent({ className }: AppFooterContentProps) {
                         size="sm"
                         className="w-full gap-2 sm:w-auto"
                         disabled={logout.isPending}
-                        onClick={() => logout.mutate()}
+                        onClick={() =>
+                          logout.mutate(undefined, {
+                            onSuccess: () => setLogoutDialogOpen(false),
+                          })
+                        }
                       >
                         {logout.isPending ? (
                           <Spinner className="size-4 opacity-80" aria-hidden />

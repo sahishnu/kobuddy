@@ -1,12 +1,11 @@
 import { Dialog } from '@base-ui/react/dialog';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
-import { apiJson } from '@/api';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
 import { DIALOG_BACKDROP_CLASS, DIALOG_POPUP_CLASS } from '@/lib/dialog-styles';
+import { useImportKoreaderSqlite } from '@/lib/hooks';
 import { cn } from '@/lib/utils';
 
 type ImportKoreaderModalProps = {
@@ -18,29 +17,9 @@ export function ImportKoreaderModal({
   open,
   onOpenChange,
 }: ImportKoreaderModalProps) {
-  const queryClient = useQueryClient();
   const [sqliteFile, setSqliteFile] = useState<File | null>(null);
   const [deviceId, setDeviceId] = useState('');
-
-  const importSqlite = useMutation({
-    mutationFn: async () => {
-      if (!sqliteFile)
-        throw new Error('Choose statistics.sqlite or statistics.sqlite3');
-      const fd = new FormData();
-      fd.append('file', sqliteFile);
-      if (deviceId.trim()) fd.append('device_id', deviceId.trim());
-      return apiJson<{
-        ok: boolean;
-        booksImported: number;
-        pageStatsImported: number;
-      }>('/api/books/import-sqlite', { method: 'POST', body: fd });
-    },
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['stats'] });
-      void queryClient.invalidateQueries({ queryKey: ['books'] });
-      setSqliteFile(null);
-    },
-  });
+  const importSqlite = useImportKoreaderSqlite();
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: only reset form state when the modal opens/closes
   useEffect(() => {
@@ -130,7 +109,15 @@ export function ImportKoreaderModal({
                   size="sm"
                   className="w-full gap-2 sm:w-auto"
                   disabled={!sqliteFile || importSqlite.isPending}
-                  onClick={() => importSqlite.mutate()}
+                  onClick={() => {
+                    if (!sqliteFile) return;
+                    importSqlite.mutate(
+                      { file: sqliteFile, deviceId },
+                      {
+                        onSuccess: () => setSqliteFile(null),
+                      },
+                    );
+                  }}
                 >
                   {importSqlite.isPending ? (
                     <>

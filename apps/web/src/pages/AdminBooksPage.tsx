@@ -1,6 +1,4 @@
 import { Dialog } from '@base-ui/react/dialog';
-import type { BookListItem } from '@kobuddy/common';
-import { useQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { EyeOff, Pencil, Search } from 'lucide-react';
 import { useMemo, useState } from 'react';
@@ -21,9 +19,8 @@ import {
 } from '@/components/ui/table';
 import { DIALOG_BACKDROP_CLASS, DIALOG_POPUP_CLASS } from '@/lib/dialog-styles';
 import { formatDuration } from '@/lib/format';
-import { useMe } from '@/lib/hooks';
+import { useAdminBooksList, useMe } from '@/lib/hooks';
 import { cn } from '@/lib/utils';
-import { apiJson } from '../api';
 
 function formatLastOpen(epoch: number | null): string {
   if (!epoch) return '—';
@@ -44,17 +41,7 @@ export function AdminBooksPage() {
 
   const me = useMe();
 
-  const allBooks = useQuery({
-    queryKey: ['books', 'admin', 'lastOpen', 'showHidden'],
-    queryFn: () =>
-      apiJson<BookListItem[]>(
-        `/api/books?${new URLSearchParams({
-          sort: 'lastOpen',
-          showHidden: 'true',
-        }).toString()}`,
-      ),
-    enabled: Boolean(me.data?.isAdmin),
-  });
+  const allBooks = useAdminBooksList(Boolean(me.data?.isAdmin));
 
   const rows = useMemo(
     () => (allBooks.data ?? []).filter((b) => !b.hidden),

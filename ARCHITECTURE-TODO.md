@@ -476,6 +476,14 @@ No web tests; server has module boundaries, web does not.
 
 Do after server candidates unless web feature work is the focus.
 
+**Completion notes (2026-05-28)**
+
+- `apps/web/src/api/` — `client.ts`, `auth.ts`, `stats.ts`, `books.ts`, barrel `index.ts`; all `/api/*` paths used by the web app live here.
+- `apps/web/src/lib/hooks/` — thin React Query hooks for pages, auth, import, and admin book edit.
+- Pages/components use hooks; `AdminBookEditDialog` no longer builds URLs inline.
+- Removed monolithic `api.ts` (imports use `@/api` → `api/index.ts`).
+- `lib/invalidate-queries.ts` — admin book mutations and import invalidate both `['books']` and `['stats']` (pairs with server stats cache bust).
+
 ---
 
 ## Suggested PR slicing (if implementing all)
@@ -509,4 +517,4 @@ _Tick candidates when done; add notes below each._
 - [x] **A3** Cover module deepening
 - [x] **A4** Ingest + cache composition
 - [x] **A5** coverUrl helper
-- [ ] **A6** Web API module
+- [x] **A6** Web API module

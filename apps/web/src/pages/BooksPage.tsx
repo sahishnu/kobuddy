@@ -1,5 +1,3 @@
-import type { BookListItem } from '@kobuddy/common';
-import { useQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { BookCoverThumb } from '@/components/BookCoverThumb';
 import { PageError } from '@/components/PageError';
@@ -12,14 +10,11 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { useBooksList } from '@/lib/hooks';
 import { cn } from '@/lib/utils';
-import { apiJson } from '../api';
 
 export function BooksPage() {
-  const books = useQuery({
-    queryKey: ['books', 'all'],
-    queryFn: () => apiJson<BookListItem[]>('/api/books'),
-  });
+  const books = useBooksList();
 
   if (books.isLoading) {
     return <PageSpinner />;

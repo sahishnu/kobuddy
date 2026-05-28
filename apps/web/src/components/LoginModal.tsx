@@ -1,12 +1,11 @@
 import { Dialog } from '@base-ui/react/dialog';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
-import { apiJson } from '@/api';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
 import { DIALOG_BACKDROP_CLASS, DIALOG_POPUP_CLASS } from '@/lib/dialog-styles';
+import { useLogin } from '@/lib/hooks';
 import { cn } from '@/lib/utils';
 
 type LoginModalProps = {
@@ -16,23 +15,11 @@ type LoginModalProps = {
 
 export function LoginModal({ open, onOpenChange }: LoginModalProps) {
   const [password, setPassword] = useState('');
-  const queryClient = useQueryClient();
+  const login = useLogin();
 
   useEffect(() => {
     if (!open) setPassword('');
   }, [open]);
-
-  const login = useMutation({
-    mutationFn: () =>
-      apiJson<{ ok: boolean }>('/api/auth/login', {
-        method: 'POST',
-        body: JSON.stringify({ password }),
-      }),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['me'] });
-      onOpenChange(false);
-    },
-  });
 
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
@@ -56,7 +43,11 @@ export function LoginModal({ open, onOpenChange }: LoginModalProps) {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !login.isPending) login.mutate();
+                    if (e.key === 'Enter' && !login.isPending) {
+                      login.mutate(password, {
+                        onSuccess: () => onOpenChange(false),
+                      });
+                    }
                   }}
                 />
               </div>
@@ -80,7 +71,11 @@ export function LoginModal({ open, onOpenChange }: LoginModalProps) {
                   size="sm"
                   className="order-1 w-full gap-2 sm:order-2 sm:w-auto"
                   disabled={login.isPending}
-                  onClick={() => login.mutate()}
+                  onClick={() =>
+                    login.mutate(password, {
+                      onSuccess: () => onOpenChange(false),
+                    })
+                  }
                 >
                   {login.isPending ? (
                     <>

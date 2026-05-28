@@ -1,19 +1,25 @@
 import { Dialog } from '@base-ui/react/dialog';
-import type {
-  BookListItem,
-  CoverCandidate,
-  IsbnCandidate,
-} from '@kobuddy/common';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import type { BookListItem } from '@kobuddy/common';
 import { Barcode, ImageIcon, Trash2, Wand2 } from 'lucide-react';
 import { useEffect, useId, useState } from 'react';
 import { toast } from 'sonner';
-import { ApiError, apiJson } from '@/api';
+import { ApiError, bookCoverImagePath } from '@/api';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
 import { DIALOG_BACKDROP_CLASS, DIALOG_POPUP_CLASS } from '@/lib/dialog-styles';
+import {
+  useApplyCoverCandidate,
+  useApplyIsbnCandidate,
+  useAutoCover,
+  useAutoIsbn,
+  useCoverCandidates,
+  useDeleteBookCover,
+  useIsbnCandidates,
+  useSaveBookMetadata,
+  useUploadBookCover,
+} from '@/lib/hooks/admin-book-edit';
 import { cn } from '@/lib/utils';
 
 type AdminBookEditDialogProps = {
@@ -50,7 +56,6 @@ export function AdminBookEditDialog({
   open,
   onOpenChange,
 }: AdminBookEditDialogProps) {
-  const queryClient = useQueryClient();
   const baseId = useId();
   const [customTitle, setCustomTitle] = useState('');
   const [authors, setAuthors] = useState('');
@@ -87,161 +92,30 @@ export function AdminBookEditDialog({
   }, [book?.md5]);
 
   const md5 = book?.md5 ?? '';
-  const coverSrc =
-    md5.length > 0 ? `/api/books/${md5}/cover?v=${coverNonce}` : '';
+  const coverSrc = md5.length > 0 ? bookCoverImagePath(md5, coverNonce) : '';
 
-  const invalidateBooks = () => {
-    void queryClient.invalidateQueries({ queryKey: ['books'] });
+  const saveMeta = useSaveBookMetadata();
+  const autoCover = useAutoCover(md5);
+  const applyCandidate = useApplyCoverCandidate(md5);
+  const removeCover = useDeleteBookCover(md5);
+  const uploadCover = useUploadBookCover(md5);
+  const candidatesQ = useCoverCandidates(
+    md5,
+    candidateQuery,
+    open && showCandidates,
+  );
+  const isbnCandidatesQ = useIsbnCandidates(
+    md5,
+    isbnMatchQuery,
+    open && showIsbnCandidates,
+  );
+  const autoIsbn = useAutoIsbn(md5);
+  const applyIsbnCandidate = useApplyIsbnCandidate(md5);
+
+  const bumpCoverPreview = () => {
+    setCoverBroken(false);
+    setCoverNonce((n) => n + 1);
   };
-
-  const saveMeta = useMutation({
-    mutationFn: async () => {
-      await apiJson<{ ok: boolean }>(`/api/books/${md5}`, {
-        method: 'PUT',
-        body: JSON.stringify({
-          customTitle: emptyToNull(customTitle),
-          authors: emptyToNull(authors),
-          isbn: emptyToNull(isbn),
-          completed,
-          ...(completed && completedDate
-            ? {
-                completedAt: Math.floor(
-                  new Date(completedDate).getTime() / 1000,
-                ),
-              }
-            : {}),
-        }),
-      });
-      if (book && hidden !== book.hidden) {
-        await apiJson<{ ok: boolean }>(`/api/books/${md5}/hide`, {
-          method: 'PUT',
-          body: JSON.stringify({ hidden }),
-        });
-      }
-    },
-    onSuccess: () => {
-      invalidateBooks();
-      onOpenChange(false);
-    },
-  });
-
-  const autoCover = useMutation({
-    mutationFn: () =>
-      apiJson<{ ok: boolean }>(`/api/books/${md5}/cover/auto`, {
-        method: 'POST',
-        body: JSON.stringify({}),
-      }),
-    onSuccess: () => {
-      setCoverBroken(false);
-      setCoverNonce((n) => n + 1);
-      invalidateBooks();
-    },
-  });
-
-  const applyCandidate = useMutation({
-    mutationFn: (c: CoverCandidate) =>
-      apiJson<{ ok: boolean }>(`/api/books/${md5}/cover/auto`, {
-        method: 'POST',
-        body: JSON.stringify({
-          provider: c.provider,
-          providerId: c.providerId,
-          ...(c.thumbnailUrl
-            ? { thumbnailUrl: c.thumbnailUrl.replace('http:', 'https:') }
-            : {}),
-        }),
-      }),
-    onSuccess: () => {
-      setCoverBroken(false);
-      setCoverNonce((n) => n + 1);
-      setShowCandidates(false);
-      invalidateBooks();
-    },
-  });
-
-  const removeCover = useMutation({
-    mutationFn: () =>
-      apiJson<{ ok: boolean }>(`/api/books/${md5}/cover`, {
-        method: 'DELETE',
-      }),
-    onSuccess: () => {
-      setCoverBroken(false);
-      setCoverNonce((n) => n + 1);
-      invalidateBooks();
-    },
-  });
-
-  const uploadCover = useMutation({
-    mutationFn: (file: File) => {
-      const fd = new FormData();
-      fd.set('file', file);
-      return apiJson<{ ok: boolean }>(`/api/books/${md5}/cover`, {
-        method: 'POST',
-        body: fd,
-      });
-    },
-    onSuccess: () => {
-      setCoverBroken(false);
-      setCoverNonce((n) => n + 1);
-      invalidateBooks();
-    },
-  });
-
-  const candidatesQ = useQuery({
-    queryKey: ['book-cover-candidates', md5, candidateQuery],
-    queryFn: () => {
-      const q = new URLSearchParams();
-      if (candidateQuery.trim()) q.set('q', candidateQuery.trim());
-      const qs = q.toString();
-      return apiJson<{ candidates: CoverCandidate[] }>(
-        `/api/books/${md5}/cover/candidates${qs ? `?${qs}` : ''}`,
-      );
-    },
-    enabled: open && Boolean(md5) && showCandidates,
-  });
-
-  const isbnCandidatesQ = useQuery({
-    queryKey: ['book-isbn-candidates', md5, isbnMatchQuery],
-    queryFn: () => {
-      const q = new URLSearchParams();
-      if (isbnMatchQuery.trim()) q.set('q', isbnMatchQuery.trim());
-      const qs = q.toString();
-      return apiJson<{ candidates: IsbnCandidate[] }>(
-        `/api/books/${md5}/isbn/candidates${qs ? `?${qs}` : ''}`,
-      );
-    },
-    enabled: open && Boolean(md5) && showIsbnCandidates,
-  });
-
-  const autoIsbn = useMutation({
-    mutationFn: () =>
-      apiJson<{ ok: boolean; isbn: string }>(`/api/books/${md5}/isbn/auto`, {
-        method: 'POST',
-        body: JSON.stringify({}),
-      }),
-    onSuccess: (data) => {
-      setIsbn(data.isbn);
-      invalidateBooks();
-      setCoverBroken(false);
-      setCoverNonce((n) => n + 1);
-    },
-    onError: (err) => toastIsbnAutoError(err),
-  });
-
-  const applyIsbnCandidate = useMutation({
-    mutationFn: (isbnValue: string) =>
-      apiJson<{ ok: boolean; isbn: string }>(`/api/books/${md5}/isbn/auto`, {
-        method: 'POST',
-        body: JSON.stringify({ isbn: isbnValue }),
-      }),
-    onSuccess: (data) => {
-      setIsbn(data.isbn);
-      setShowIsbnCandidates(false);
-      invalidateBooks();
-      setCoverBroken(false);
-      setCoverNonce((n) => n + 1);
-    },
-    onError: (err) => toastIsbnAutoError(err),
-  });
 
   const busy =
     saveMeta.isPending ||
@@ -317,7 +191,11 @@ export function AdminBookEditDialog({
                           variant="outline"
                           className="gap-1.5"
                           disabled={busy}
-                          onClick={() => autoCover.mutate()}
+                          onClick={() =>
+                            autoCover.mutate(undefined, {
+                              onSuccess: bumpCoverPreview,
+                            })
+                          }
                         >
                           {autoCover.isPending ? (
                             <Spinner className="size-3.5 opacity-80" />
@@ -353,7 +231,11 @@ export function AdminBookEditDialog({
                             onChange={(e) => {
                               const f = e.target.files?.[0];
                               e.target.value = '';
-                              if (f) uploadCover.mutate(f);
+                              if (f) {
+                                uploadCover.mutate(f, {
+                                  onSuccess: bumpCoverPreview,
+                                });
+                              }
                             }}
                           />
                         </label>
@@ -363,7 +245,11 @@ export function AdminBookEditDialog({
                           variant="outline"
                           className="gap-1.5 text-destructive hover:text-destructive"
                           disabled={busy}
-                          onClick={() => removeCover.mutate()}
+                          onClick={() =>
+                            removeCover.mutate(undefined, {
+                              onSuccess: bumpCoverPreview,
+                            })
+                          }
                         >
                           {removeCover.isPending ? (
                             <Spinner className="size-3.5 opacity-80" />
@@ -414,7 +300,14 @@ export function AdminBookEditDialog({
                                 key={`${c.provider}:${c.providerId}`}
                                 type="button"
                                 disabled={applyCandidate.isPending}
-                                onClick={() => applyCandidate.mutate(c)}
+                                onClick={() =>
+                                  applyCandidate.mutate(c, {
+                                    onSuccess: () => {
+                                      bumpCoverPreview();
+                                      setShowCandidates(false);
+                                    },
+                                  })
+                                }
                                 className={cn(
                                   'group relative aspect-[2/3] overflow-hidden rounded-md bg-muted ring-1 ring-white/10',
                                   'transition hover:ring-reading/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-reading',
@@ -519,7 +412,15 @@ export function AdminBookEditDialog({
                           variant="outline"
                           className="gap-1.5"
                           disabled={busy}
-                          onClick={() => autoIsbn.mutate()}
+                          onClick={() =>
+                            autoIsbn.mutate(undefined, {
+                              onSuccess: (data) => {
+                                setIsbn(data.isbn);
+                                bumpCoverPreview();
+                              },
+                              onError: toastIsbnAutoError,
+                            })
+                          }
                         >
                           {autoIsbn.isPending ? (
                             <Spinner className="size-3.5 opacity-80" />
@@ -577,7 +478,14 @@ export function AdminBookEditDialog({
                                       type="button"
                                       disabled={applyIsbnCandidate.isPending}
                                       onClick={() =>
-                                        applyIsbnCandidate.mutate(c.isbn)
+                                        applyIsbnCandidate.mutate(c.isbn, {
+                                          onSuccess: (data) => {
+                                            setIsbn(data.isbn);
+                                            setShowIsbnCandidates(false);
+                                            bumpCoverPreview();
+                                          },
+                                          onError: toastIsbnAutoError,
+                                        })
                                       }
                                       className={cn(
                                         'flex w-full flex-col gap-0.5 rounded px-2 py-1.5 text-left text-sm',
@@ -639,7 +547,30 @@ export function AdminBookEditDialog({
                 size="sm"
                 className="w-full gap-2 sm:w-auto"
                 disabled={!book || saveMeta.isPending}
-                onClick={() => saveMeta.mutate()}
+                onClick={() => {
+                  if (!book) return;
+                  saveMeta.mutate(
+                    {
+                      md5,
+                      body: {
+                        customTitle: emptyToNull(customTitle),
+                        authors: emptyToNull(authors),
+                        isbn: emptyToNull(isbn),
+                        completed,
+                        ...(completed && completedDate
+                          ? {
+                              completedAt: Math.floor(
+                                new Date(completedDate).getTime() / 1000,
+                              ),
+                            }
+                          : {}),
+                      },
+                      hidden,
+                      previousHidden: book.hidden,
+                    },
+                    { onSuccess: () => onOpenChange(false) },
+                  );
+                }}
               >
                 {saveMeta.isPending ? (
                   <>

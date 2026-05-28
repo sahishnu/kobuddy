@@ -1,13 +1,11 @@
-import type { BookListItem, StatsOverview } from '@kobuddy/common';
 import { Letters } from '@kumailnanji/letters';
-import { useQuery } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 import { useMemo } from 'react';
 import { AppFooterBentoSlot } from '@/components/AppFooter';
 import { PageError } from '@/components/PageError';
 import { PageSpinner } from '@/components/PageSpinner';
 import { formatDuration } from '@/lib/format';
-import { apiJson } from '../api';
+import { useHomeShelfBooks, useStatsOverview } from '@/lib/hooks';
 import { BentoCard } from '../components/BentoCard';
 import { BookshelfRow, type ShelfBook } from '../components/BookshelfRow';
 import { CurrentBookCard } from '../components/CurrentBookCard';
@@ -31,25 +29,8 @@ export function HomePage() {
     [],
   );
 
-  const stats = useQuery({
-    queryKey: ['stats', timeZone],
-    queryFn: () =>
-      apiJson<StatsOverview>(
-        `/api/stats?${new URLSearchParams({ timeZone }).toString()}`,
-      ),
-  });
-
-  const shelf = useQuery({
-    queryKey: ['books', 'shelf'],
-    queryFn: () =>
-      apiJson<BookListItem[]>(
-        `/api/books?${new URLSearchParams({
-          sort: 'lastOpen',
-          limit: '8',
-          shelf: 'true',
-        }).toString()}`,
-      ),
-  });
+  const stats = useStatsOverview(timeZone);
+  const shelf = useHomeShelfBooks();
 
   if (stats.isLoading) {
     return <PageSpinner />;
