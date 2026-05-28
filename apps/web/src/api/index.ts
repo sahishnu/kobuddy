@@ -27,6 +27,7 @@ export {
   deleteLoadingQuote,
   fetchLoadingQuotes,
   fetchRandomLoadingQuote,
+  syncDefaultLoadingQuotes,
   updateLoadingQuote,
 } from './loading-quotes.js';
 export { fetchReadingGoal, setReadingGoal } from './reading-goals.js';

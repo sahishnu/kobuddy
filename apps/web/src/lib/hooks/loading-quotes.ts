@@ -5,6 +5,7 @@ import {
   deleteLoadingQuote,
   fetchLoadingQuotes,
   fetchRandomLoadingQuote,
+  syncDefaultLoadingQuotes,
   updateLoadingQuote,
 } from '@/api';
 
@@ -55,6 +56,15 @@ export function useDeleteLoadingQuote() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: number) => deleteLoadingQuote(id),
+    onSuccess: () => invalidateLoadingQuotes(qc),
+  });
+}
+
+/** Replace DB quotes with the list baked into the deployed server build. */
+export function useSyncDefaultLoadingQuotes() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => syncDefaultLoadingQuotes(),
     onSuccess: () => invalidateLoadingQuotes(qc),
   });
 }

@@ -2,6 +2,7 @@ import type {
   LoadingQuote,
   LoadingQuoteInput,
   LoadingQuoteListResponse,
+  SyncLoadingQuotesResponse,
 } from '@kobuddy/common';
 import { apiJson } from './client.js';
 
@@ -30,6 +31,13 @@ export function updateLoadingQuote(
     method: 'PUT',
     body: JSON.stringify(input),
   });
+}
+
+export function syncDefaultLoadingQuotes(): Promise<SyncLoadingQuotesResponse> {
+  return apiJson<SyncLoadingQuotesResponse>(
+    '/api/loading-quotes/sync-defaults',
+    { method: 'POST' },
+  );
 }
 
 export function deleteLoadingQuote(id: number): Promise<{ ok: true }> {

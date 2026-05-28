@@ -4,6 +4,7 @@ import {
   LOADING_QUOTE_BOOK_MAX,
   LOADING_QUOTE_TEXT_MAX,
   type LoadingQuoteListResponse,
+  type SyncLoadingQuotesResponse,
 } from '@kobuddy/common';
 import { Hono } from 'hono';
 import { z } from 'zod';
@@ -14,6 +15,7 @@ import {
   deleteLoadingQuote,
   getRandomLoadingQuote,
   listLoadingQuotes,
+  syncDefaultLoadingQuotes,
   updateLoadingQuote,
 } from '../loading-quotes/index.js';
 import { requireAdmin } from '../middleware/require-admin.js';
@@ -39,6 +41,12 @@ export function loadingQuotesRouter(cfg: AppConfig, db: DbClient) {
       return c.json({ error: 'No loading quotes configured' }, 404);
     }
     return c.json(quote);
+  });
+
+  r.post('/sync-defaults', requireAdmin, async (c) => {
+    const result = await syncDefaultLoadingQuotes(db, 'replace');
+    const body: SyncLoadingQuotesResponse = result;
+    return c.json(body);
   });
 
   r.get('/', requireAdmin, async (c) => {

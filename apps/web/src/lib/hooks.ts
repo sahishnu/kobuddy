@@ -11,6 +11,7 @@ export {
   useDeleteLoadingQuote,
   useLoadingQuotes,
   useRandomLoadingQuote,
+  useSyncDefaultLoadingQuotes,
   useUpdateLoadingQuote,
 } from './hooks/loading-quotes.js';
 export { useReadingGoal, useSetReadingGoal } from './hooks/reading-goals.js';

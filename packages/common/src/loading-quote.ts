@@ -29,3 +29,9 @@ export type LoadingQuoteInput = {
 export type LoadingQuoteListResponse = {
   items: LoadingQuote[];
 };
+
+export type SyncLoadingQuotesResponse = {
+  mode: 'if-empty' | 'replace';
+  inserted: number;
+  skipped: boolean;
+};

@@ -8,6 +8,7 @@ import {
   useCreateLoadingQuote,
   useDeleteLoadingQuote,
   useLoadingQuotes,
+  useSyncDefaultLoadingQuotes,
   useUpdateLoadingQuote,
 } from '@/lib/hooks/loading-quotes';
 import {
@@ -28,6 +29,7 @@ export function AdminLoadingQuotesForm({ enabled }: Props) {
   const create = useCreateLoadingQuote();
   const update = useUpdateLoadingQuote();
   const remove = useDeleteLoadingQuote();
+  const syncDefaults = useSyncDefaultLoadingQuotes();
   const addId = useId();
 
   const [adding, setAdding] = useState(false);
@@ -74,6 +76,14 @@ export function AdminLoadingQuotesForm({ enabled }: Props) {
     remove.mutate(id);
   };
 
+  const handleImportBuiltIn = () => {
+    const ok = window.confirm(
+      'Replace every splash quote with the built-in list from this server build? Quotes you added by hand will be removed.',
+    );
+    if (!ok) return;
+    syncDefaults.mutate();
+  };
+
   if (list.isLoading) {
     return (
       <div className="flex justify-center py-6">
@@ -91,21 +101,28 @@ export function AdminLoadingQuotesForm({ enabled }: Props) {
   return (
     <div className="space-y-4">
       <p className="text-sm text-muted-foreground">
-        Fiction quotes shown on the app splash when someone opens the site. Only
-        enabled quotes are chosen at random.
+        Shown on the one-time app splash. Only enabled quotes are chosen at
+        random.
       </p>
+
+      <div className="flex flex-wrap gap-2">
+        <Button
+          type="button"
+          size="sm"
+          variant="secondary"
+          onClick={handleImportBuiltIn}
+          disabled={syncDefaults.isPending}
+        >
+          {syncDefaults.isPending ? 'Importing…' : 'Import built-in quotes'}
+        </Button>
+      </div>
+      {syncDefaults.isError ? (
+        <p className="text-xs text-destructive">{syncDefaults.error.message}</p>
+      ) : null}
 
       {items.length === 0 && !adding ? (
         <p className="text-sm text-muted-foreground">
-          No quotes yet. Add one below, or edit{' '}
-          <code className="rounded bg-muted px-1 py-0.5 text-xs">
-            default-quotes.ts
-          </code>{' '}
-          and run{' '}
-          <code className="rounded bg-muted px-1 py-0.5 text-xs">
-            pnpm seed:loading-quotes -- --replace
-          </code>
-          .
+          No quotes yet. Import built-in quotes or add one below.
         </p>
       ) : null}
 
