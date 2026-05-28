@@ -1,4 +1,34 @@
 /** Minimal OpenAPI 3.1 document for Scalar; extend as routes grow. */
+const bookListItemSchema = {
+  type: 'object',
+  properties: {
+    md5: { type: 'string' },
+    displayTitle: { type: 'string' },
+    hidden: { type: 'boolean' },
+    coverUrl: { type: 'string', nullable: true },
+  },
+} as const;
+
+const bookListPageSchema = {
+  type: 'object',
+  required: ['items', 'total', 'page', 'pageSize'],
+  properties: {
+    items: { type: 'array', items: bookListItemSchema },
+    total: { type: 'integer' },
+    page: { type: 'integer' },
+    pageSize: { type: 'integer' },
+  },
+} as const;
+
+const readingGoalResponseSchema = {
+  type: 'object',
+  required: ['year', 'books'],
+  properties: {
+    year: { type: 'integer' },
+    books: { type: 'integer', minimum: 1, nullable: true },
+  },
+} as const;
+
 export const openApiDocument = {
   openapi: '3.1.0',
   info: {
@@ -106,6 +136,32 @@ export const openApiDocument = {
             schema: { type: 'integer', minimum: 1, maximum: 100 },
           },
           {
+            name: 'page',
+            in: 'query',
+            description:
+              '1-based page; response is BookListPage instead of an array. Paginated requests still honor showHidden (admin) and hiddenOnly.',
+            schema: { type: 'integer', minimum: 1 },
+          },
+          {
+            name: 'pageSize',
+            in: 'query',
+            description: 'Pagination page size (default 25, max 100)',
+            schema: { type: 'integer', minimum: 1, maximum: 100 },
+          },
+          {
+            name: 'q',
+            in: 'query',
+            description:
+              'Search across title, custom title, author, series, ISBN, md5',
+            schema: { type: 'string' },
+          },
+          {
+            name: 'hiddenOnly',
+            in: 'query',
+            description: 'Admin only: list hidden books',
+            schema: { type: 'string', enum: ['true', 'false'] },
+          },
+          {
             name: 'shelf',
             in: 'query',
             description:
@@ -113,7 +169,90 @@ export const openApiDocument = {
             schema: { type: 'string', enum: ['true', 'false'] },
           },
         ],
-        responses: { '200': { description: 'OK' } },
+        responses: {
+          '200': {
+            description:
+              'BookListItem[] when page is omitted; BookListPage when page is set',
+            content: {
+              'application/json': {
+                schema: {
+                  oneOf: [
+                    { type: 'array', items: bookListItemSchema },
+                    bookListPageSchema,
+                  ],
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+    '/api/reading-goals/{year}': {
+      get: {
+        tags: ['settings'],
+        summary:
+          'Annual books reading goal for a calendar year (public read or admin)',
+        parameters: [
+          {
+            name: 'year',
+            in: 'path',
+            required: true,
+            schema: { type: 'integer' },
+          },
+        ],
+        responses: {
+          '200': {
+            description: 'OK',
+            content: {
+              'application/json': {
+                schema: readingGoalResponseSchema,
+              },
+            },
+          },
+          '401': { description: 'Unauthorized when PUBLIC_READ is false' },
+        },
+      },
+      put: {
+        tags: ['settings'],
+        summary: 'Set or clear annual books reading goal (admin)',
+        parameters: [
+          {
+            name: 'year',
+            in: 'path',
+            required: true,
+            schema: { type: 'integer' },
+          },
+        ],
+        requestBody: {
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['books'],
+                properties: {
+                  books: {
+                    type: 'integer',
+                    minimum: 1,
+                    maximum: 9999,
+                    nullable: true,
+                    description: 'Pass null to clear the goal',
+                  },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          '200': {
+            description: 'OK',
+            content: {
+              'application/json': {
+                schema: readingGoalResponseSchema,
+              },
+            },
+          },
+          '401': { description: 'Unauthorized' },
+        },
       },
     },
     '/api/stats': {

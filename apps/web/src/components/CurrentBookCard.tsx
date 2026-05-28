@@ -1,5 +1,4 @@
 import type { CurrentReadingBook } from '@kobuddy/common';
-import { BookOpen } from 'lucide-react';
 import { useState } from 'react';
 
 import { Progress } from '@/components/ui/progress';
@@ -33,15 +32,12 @@ function CoverBlock({ book }: { book: CurrentReadingBook }) {
         />
       ) : (
         <div
-          className="flex h-full w-full flex-col items-center justify-center gap-2 px-2 text-center"
-          aria-hidden
+          role="img"
+          aria-label={book.displayTitle}
+          className="flex h-full w-full items-center justify-center px-3 py-4 text-center"
         >
-          <BookOpen
-            className="size-12 text-muted-foreground/50 sm:size-14"
-            strokeWidth={1.25}
-          />
-          <span className="text-xs leading-snug text-muted-foreground">
-            No cover
+          <span className="font-heading text-sm font-semibold leading-snug text-muted-foreground line-clamp-[10] sm:text-base">
+            {book.displayTitle}
           </span>
         </div>
       )}

@@ -16,7 +16,7 @@ export function statsRouter(cfg: AppConfig, db: DbClient) {
   r.get('/', requirePublicReadOrAdmin(cfg), async (c) => {
     const rawTz = c.req.query('timeZone') ?? c.req.query('tz');
     const timeZone = rawTz && isValidIanaTimeZone(rawTz) ? rawTz : 'UTC';
-    const overview = await statsOverview(db, cfg, timeZone);
+    const overview = await statsOverview(db, timeZone);
     return c.json(overview);
   });
 

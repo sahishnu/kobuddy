@@ -1,12 +1,15 @@
 export { fetchMe, login, logout, type MeResponse } from './auth.js';
 export {
+  type AdminBooksPageParams,
   type AutoCoverPayload,
   applyAutoCover,
   applyAutoIsbn,
+  type BooksPageParams,
   bookCoverImagePath,
   deleteBookCover,
-  fetchAdminBooks,
+  fetchAdminBooksPage,
   fetchBooks,
+  fetchBooksPage,
   fetchCoverCandidates,
   fetchHomeShelfBooks,
   fetchIsbnCandidates,
@@ -19,4 +22,5 @@ export {
   uploadBookCover,
 } from './books.js';
 export { ApiError, apiJson } from './client.js';
+export { fetchReadingGoal, setReadingGoal } from './reading-goals.js';
 export { fetchStatsOverview } from './stats.js';

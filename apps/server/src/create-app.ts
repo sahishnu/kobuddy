@@ -14,6 +14,7 @@ import { authRouter } from './routes/auth.js';
 import { booksRouter } from './routes/books.js';
 import { ingestRouter } from './routes/ingest.js';
 import { pluginZipRouter } from './routes/plugin-zip.js';
+import { readingGoalsRouter } from './routes/reading-goals.js';
 import { statsRouter } from './routes/stats.js';
 import { sessionOptions } from './session-options.js';
 
@@ -63,6 +64,7 @@ export function createApp(cfg: AppConfig, db: DbClient, webDistAbs: string) {
   api.route('/ingest', ingestRouter(cfg, db));
   api.route('/books', booksRouter(cfg, db));
   api.route('/stats', statsRouter(cfg, db));
+  api.route('/reading-goals', readingGoalsRouter(cfg, db));
 
   api.get('/openapi.json', (c) => c.json(openApiDocument));
 

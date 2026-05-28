@@ -6,6 +6,7 @@ import { BentoCard } from './BentoCard';
 
 export type ShelfBook = {
   md5: string;
+  displayTitle: string;
   coverUrl: string | null;
   totalReadTime: number;
   percentComplete: number;
@@ -47,6 +48,7 @@ export function BookshelfRow({ books, className }: Props) {
               <BookCoverThumb
                 variant="shelf"
                 coverUrl={b.coverUrl}
+                displayTitle={b.displayTitle}
                 className="flex-1 shadow-md ring-white/15"
               />
               {(b.totalReadTime > 0 ||

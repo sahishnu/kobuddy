@@ -17,7 +17,6 @@ export function testAppConfig(overrides: Partial<AppConfig> = {}): AppConfig {
     AUTO_FETCH_COVERS: false,
     GOOGLE_BOOKS_API_KEY: undefined,
     REQUIRED_PLUGIN_VERSION: '0.1.0',
-    READING_GOAL_BOOKS: undefined,
     ...overrides,
   };
 }

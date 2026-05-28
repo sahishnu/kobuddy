@@ -1,8 +1,8 @@
 import type { StatsByBook, StatsOverview } from '@kobuddy/common';
 import { book, pageStat } from '@kobuddy/db/schema';
 import { eq } from 'drizzle-orm';
-import type { AppConfig } from '../config.js';
 import type { DbClient } from '../lib/db.js';
+import { getReadingGoalForYear } from '../reading-goals/index.js';
 import {
   getPerMonthReadingTime,
   perDayOfTheWeek,
@@ -15,6 +15,7 @@ import {
 import { getCachedJson, setCachedJson } from './stats-cache.js';
 import { calendarByDayInZone } from './stats-dashboard.js';
 import { loadVisiblePageStats } from './stats-queries.js';
+import { localYear } from './stats-tz.js';
 
 export type { OverviewBuildInput } from './build-overview.js';
 export {
@@ -26,7 +27,6 @@ export { isValidIanaTimeZone } from './stats-tz.js';
 
 export async function statsOverview(
   db: DbClient,
-  cfg: AppConfig,
   timeZone: string,
 ): Promise<StatsOverview> {
   const cacheKey = `stats:overview:${timeZone}`;
@@ -35,7 +35,14 @@ export async function statsOverview(
 
   const input = await loadOverviewBuildInput(db);
   const nowMs = Date.now();
-  const overview = buildStatsOverview(input, cfg, timeZone, nowMs);
+  const year = localYear(Math.floor(nowMs / 1000), timeZone);
+  const readingGoalBooksPerYear = await getReadingGoalForYear(db, year);
+  const overview = buildStatsOverview(
+    input,
+    readingGoalBooksPerYear,
+    timeZone,
+    nowMs,
+  );
 
   await setCachedJson(db, cacheKey, overview);
   return overview;

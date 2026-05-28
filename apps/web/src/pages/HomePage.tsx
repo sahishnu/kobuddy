@@ -1,3 +1,4 @@
+import { localCalendarYear } from '@kobuddy/common';
 import { Letters } from '@kumailnanji/letters';
 import type { ReactNode } from 'react';
 import { useMemo } from 'react';
@@ -45,18 +46,14 @@ export function HomePage() {
 
   const shelfBooks: ShelfBook[] = (shelf.data ?? []).map((b) => ({
     md5: b.md5,
+    displayTitle: b.displayTitle,
     coverUrl: b.coverUrl,
     totalReadTime: b.totalReadTime,
     percentComplete: Math.min(100, b.percentComplete),
     completed: b.completed,
   }));
 
-  const yearLabel = Number(
-    new Intl.DateTimeFormat('en-US', {
-      timeZone: s.statsTimeZone,
-      year: 'numeric',
-    }).format(new Date()),
-  );
+  const yearLabel = localCalendarYear(s.statsTimeZone);
 
   return (
     <div className="mx-auto w-full min-w-0 max-w-[1200px] space-y-4 overflow-x-hidden p-4 pb-10 md:p-5">

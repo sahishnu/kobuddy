@@ -1,10 +1,13 @@
 import { Dialog } from '@base-ui/react/dialog';
+import type { BookListItem } from '@kobuddy/common';
 import { Link } from '@tanstack/react-router';
-import { EyeOff, Pencil, Search } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { EyeOff, Pencil, Search, Settings } from 'lucide-react';
+import { useEffect, useState } from 'react';
 import { useAuthUi } from '@/auth-ui';
 import { AdminBookEditDialog } from '@/components/AdminBookEditDialog';
+import { AdminPreferencesDialog } from '@/components/AdminPreferencesDialog';
 import { BookCoverThumb } from '@/components/BookCoverThumb';
+import { BooksPagination } from '@/components/BooksPagination';
 import { PageError } from '@/components/PageError';
 import { PageSpinner } from '@/components/PageSpinner';
 import { Button, buttonVariants } from '@/components/ui/button';
@@ -19,7 +22,8 @@ import {
 } from '@/components/ui/table';
 import { DIALOG_BACKDROP_CLASS, DIALOG_POPUP_CLASS } from '@/lib/dialog-styles';
 import { formatDuration } from '@/lib/format';
-import { useAdminBooksList, useMe } from '@/lib/hooks';
+import { BOOKS_LIST_PAGE_SIZE, useAdminBooksPage, useMe } from '@/lib/hooks';
+import { useDebouncedValue } from '@/lib/use-debounced-value';
 import { cn } from '@/lib/utils';
 
 function formatLastOpen(epoch: number | null): string {
@@ -35,65 +39,72 @@ function formatLastOpen(epoch: number | null): string {
 export function AdminBooksPage() {
   const { openLoginModal } = useAuthUi();
   const [filter, setFilter] = useState('');
-  const [selectedMd5, setSelectedMd5] = useState<string | null>(null);
+  const search = useDebouncedValue(filter.trim(), 300);
+  const [page, setPage] = useState(1);
+  const [hiddenPage, setHiddenPage] = useState(1);
+  const [selectedBook, setSelectedBook] = useState<BookListItem | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [hiddenListOpen, setHiddenListOpen] = useState(false);
+  const [preferencesOpen, setPreferencesOpen] = useState(false);
 
   const me = useMe();
+  const isAdmin = Boolean(me.data?.isAdmin);
 
-  const allBooks = useAdminBooksList(Boolean(me.data?.isAdmin));
+  useEffect(() => {
+    void search;
+    setPage(1);
+  }, [search]);
 
-  const rows = useMemo(
-    () => (allBooks.data ?? []).filter((b) => !b.hidden),
-    [allBooks.data],
-  );
-  const hiddenRows = useMemo(
-    () => (allBooks.data ?? []).filter((b) => b.hidden),
-    [allBooks.data],
-  );
-  const needle = filter.trim().toLowerCase();
+  const booksPage = useAdminBooksPage(isAdmin, {
+    page,
+    q: search || undefined,
+  });
 
-  const filtered = useMemo(() => {
-    if (!needle) return rows;
-    return rows.filter((b) => {
-      const hay = [
-        b.displayTitle,
-        b.authors,
-        b.md5,
-        b.isbn,
-        b.title,
-        b.customTitle,
-      ]
-        .filter(Boolean)
-        .join(' ')
-        .toLowerCase();
-      return hay.includes(needle);
-    });
-  }, [rows, needle]);
+  const hiddenBooksPage = useAdminBooksPage(isAdmin && hiddenListOpen, {
+    page: hiddenPage,
+    hiddenOnly: true,
+  });
 
-  const selectedBook = useMemo(
-    () =>
-      selectedMd5
-        ? ((allBooks.data ?? []).find((b) => b.md5 === selectedMd5) ?? null)
-        : null,
-    [allBooks.data, selectedMd5],
-  );
+  const hiddenCountQuery = useAdminBooksPage(isAdmin, {
+    page: 1,
+    pageSize: 1,
+    hiddenOnly: true,
+  });
 
-  const openEditor = (md5: string) => {
-    setSelectedMd5(md5);
+  const rows = booksPage.data?.items ?? [];
+  const total = booksPage.data?.total ?? 0;
+  const pageSize = booksPage.data?.pageSize ?? BOOKS_LIST_PAGE_SIZE;
+  const pageCount = Math.max(1, Math.ceil(total / pageSize));
+
+  useEffect(() => {
+    if (page > pageCount) setPage(pageCount);
+  }, [page, pageCount]);
+
+  const hiddenRows = hiddenBooksPage.data?.items ?? [];
+  const hiddenTotal = hiddenBooksPage.data?.total ?? 0;
+  const hiddenCount = hiddenCountQuery.data?.total ?? 0;
+  const hiddenPageSize = hiddenBooksPage.data?.pageSize ?? BOOKS_LIST_PAGE_SIZE;
+  const hiddenPageCount = Math.max(1, Math.ceil(hiddenTotal / hiddenPageSize));
+
+  useEffect(() => {
+    if (hiddenPage > hiddenPageCount) setHiddenPage(hiddenPageCount);
+  }, [hiddenPage, hiddenPageCount]);
+
+  const openEditor = (book: BookListItem) => {
+    setSelectedBook(book);
     setDialogOpen(true);
   };
 
-  const openEditorFromHiddenList = (md5: string) => {
+  const openEditorFromHiddenList = (book: BookListItem) => {
     setHiddenListOpen(false);
-    openEditor(md5);
+    openEditor(book);
   };
 
   if (me.isLoading) {
     return <PageSpinner />;
   }
 
-  if (!me.data?.isAdmin) {
+  if (!isAdmin) {
     return (
       <div className="mx-auto max-w-md space-y-6 p-6">
         <header>
@@ -119,12 +130,12 @@ export function AdminBooksPage() {
     );
   }
 
-  if (allBooks.isLoading) {
+  if (booksPage.isLoading && !booksPage.data) {
     return <PageSpinner />;
   }
 
-  if (allBooks.isError) {
-    return <PageError error={allBooks.error} />;
+  if (booksPage.isError) {
+    return <PageError error={booksPage.error} />;
   }
 
   return (
@@ -139,20 +150,30 @@ export function AdminBooksPage() {
           </p>
           <button
             type="button"
-            onClick={() => setHiddenListOpen(true)}
+            onClick={() => {
+              setHiddenPage(1);
+              setHiddenListOpen(true);
+            }}
             className="mt-2 inline-flex items-center gap-1.5 text-xs text-muted-foreground/90 transition-colors hover:text-foreground"
             aria-haspopup="dialog"
           >
             <EyeOff className="size-3.5 shrink-0 opacity-70" aria-hidden />
             Hidden books
-            {allBooks.isSuccess ? (
-              <span className="tabular-nums opacity-80">
-                ({hiddenRows.length})
-              </span>
-            ) : null}
+            <span className="tabular-nums opacity-80">({hiddenCount})</span>
           </button>
         </div>
-        <div className="flex flex-wrap gap-3 text-sm">
+        <div className="flex flex-wrap items-center gap-3 text-sm">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="gap-1.5"
+            onClick={() => setPreferencesOpen(true)}
+            aria-haspopup="dialog"
+          >
+            <Settings className="size-3.5 opacity-80" aria-hidden />
+            Preferences
+          </Button>
           <Link
             to="/"
             className="text-muted-foreground underline-offset-4 transition-colors hover:text-foreground hover:underline"
@@ -168,6 +189,11 @@ export function AdminBooksPage() {
         </div>
       </header>
 
+      <AdminPreferencesDialog
+        open={preferencesOpen}
+        onOpenChange={setPreferencesOpen}
+      />
+
       <div className="relative max-w-md">
         <Search
           className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
@@ -181,6 +207,13 @@ export function AdminBooksPage() {
           aria-label="Filter books"
         />
       </div>
+
+      <BooksPagination
+        page={page}
+        pageSize={pageSize}
+        total={total}
+        onPageChange={setPage}
+      />
 
       <Table className="table-fixed">
         <TableHeader>
@@ -203,74 +236,95 @@ export function AdminBooksPage() {
           </TableRow>
         </TableHeader>
         <TableBody>
-          {filtered.map((b, i) => (
-            <TableRow key={b.md5} className={cn(i % 2 === 1 && 'bg-muted/40')}>
-              <TableCell className="w-[72px] align-top">
-                <BookCoverThumb coverUrl={b.coverUrl} />
+          {booksPage.isFetching && rows.length === 0 ? (
+            <TableRow>
+              <TableCell colSpan={7} className="py-10 text-center text-sm">
+                Loading…
               </TableCell>
-              <TableCell className="min-w-0 max-w-0 align-top">
-                <div
-                  className="truncate font-medium leading-snug"
-                  title={b.displayTitle}
-                >
-                  {b.displayTitle}
-                </div>
-                <div
-                  className="mt-1 truncate text-xs text-muted-foreground sm:hidden"
+            </TableRow>
+          ) : (
+            rows.map((b, i) => (
+              <TableRow
+                key={b.md5}
+                className={cn(i % 2 === 1 && 'bg-muted/40')}
+              >
+                <TableCell className="w-[72px] align-top">
+                  <BookCoverThumb
+                    coverUrl={b.coverUrl}
+                    displayTitle={b.displayTitle}
+                  />
+                </TableCell>
+                <TableCell className="min-w-0 max-w-0 align-top">
+                  <div
+                    className="truncate font-medium leading-snug"
+                    title={b.displayTitle}
+                  >
+                    {b.displayTitle}
+                  </div>
+                  <div
+                    className="mt-1 truncate text-xs text-muted-foreground sm:hidden"
+                    title={b.authors ?? undefined}
+                  >
+                    {b.authors ?? '—'}
+                  </div>
+                </TableCell>
+                <TableCell
+                  className="hidden min-w-0 max-w-0 truncate text-muted-foreground sm:table-cell"
                   title={b.authors ?? undefined}
                 >
                   {b.authors ?? '—'}
-                </div>
-              </TableCell>
-              <TableCell
-                className="hidden min-w-0 max-w-0 truncate text-muted-foreground sm:table-cell"
-                title={b.authors ?? undefined}
-              >
-                {b.authors ?? '—'}
-              </TableCell>
-              <TableCell className="w-[120px]">
-                <div className="flex flex-col items-end gap-1.5">
-                  <span className="tabular-nums text-sm text-muted-foreground">
-                    {b.totalReadPages} / {b.pages}
-                  </span>
-                  <div className="relative h-1.5 w-full overflow-hidden rounded-full bg-muted">
-                    <div
-                      className="h-full rounded-full bg-primary transition-all"
-                      style={{
-                        width: `${b.pages > 0 ? Math.min(100, Math.round((b.totalReadPages / b.pages) * 100)) : 0}%`,
-                      }}
-                    />
+                </TableCell>
+                <TableCell className="w-[120px]">
+                  <div className="flex flex-col items-end gap-1.5">
+                    <span className="tabular-nums text-sm text-muted-foreground">
+                      {b.totalReadPages} / {b.pages}
+                    </span>
+                    <div className="relative h-1.5 w-full overflow-hidden rounded-full bg-muted">
+                      <div
+                        className="h-full rounded-full bg-primary transition-all"
+                        style={{
+                          width: `${b.pages > 0 ? Math.min(100, Math.round((b.totalReadPages / b.pages) * 100)) : 0}%`,
+                        }}
+                      />
+                    </div>
                   </div>
-                </div>
-              </TableCell>
-              <TableCell className="hidden tabular-nums text-right text-sm text-muted-foreground sm:table-cell">
-                {b.totalReadTime > 0 ? formatDuration(b.totalReadTime) : '—'}
-              </TableCell>
-              <TableCell className="hidden text-right text-sm text-muted-foreground md:table-cell">
-                {formatLastOpen(b.lastOpen)}
-              </TableCell>
-              <TableCell className="w-[88px] text-right">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="gap-1.5"
-                  onClick={() => openEditor(b.md5)}
-                >
-                  <Pencil className="size-3.5 opacity-80" aria-hidden />
-                  Edit
-                </Button>
-              </TableCell>
-            </TableRow>
-          ))}
+                </TableCell>
+                <TableCell className="hidden tabular-nums text-right text-sm text-muted-foreground sm:table-cell">
+                  {b.totalReadTime > 0 ? formatDuration(b.totalReadTime) : '—'}
+                </TableCell>
+                <TableCell className="hidden text-right text-sm text-muted-foreground md:table-cell">
+                  {formatLastOpen(b.lastOpen)}
+                </TableCell>
+                <TableCell className="w-[88px] text-right">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="gap-1.5"
+                    onClick={() => openEditor(b)}
+                  >
+                    <Pencil className="size-3.5 opacity-80" aria-hidden />
+                    Edit
+                  </Button>
+                </TableCell>
+              </TableRow>
+            ))
+          )}
         </TableBody>
       </Table>
 
-      {filtered.length === 0 ? (
+      {rows.length === 0 && !booksPage.isFetching ? (
         <p className="text-center text-sm text-muted-foreground">
-          No books match this filter.
+          {search ? 'No books match this search.' : 'No books in the library.'}
         </p>
       ) : null}
+
+      <BooksPagination
+        page={page}
+        pageSize={pageSize}
+        total={total}
+        onPageChange={setPage}
+      />
 
       <AdminBookEditDialog
         book={selectedBook}
@@ -298,61 +352,79 @@ export function AdminBooksPage() {
                 </Dialog.Description>
               </div>
               <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3 sm:px-4">
-                {hiddenRows.length === 0 ? (
+                {hiddenBooksPage.isLoading && hiddenRows.length === 0 ? (
+                  <p className="px-2 py-8 text-center text-sm text-muted-foreground">
+                    Loading…
+                  </p>
+                ) : hiddenTotal === 0 ? (
                   <p className="px-2 py-8 text-center text-sm text-muted-foreground">
                     No hidden books.
                   </p>
                 ) : (
-                  <Table className="table-fixed">
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="w-[72px]" />
-                        <TableHead className="min-w-0">Title</TableHead>
-                        <TableHead className="w-[72px]" />
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {hiddenRows.map((b, i) => (
-                        <TableRow
-                          key={b.md5}
-                          className={cn(i % 2 === 1 && 'bg-muted/40')}
-                        >
-                          <TableCell className="w-[72px] align-middle">
-                            <BookCoverThumb coverUrl={b.coverUrl} />
-                          </TableCell>
-                          <TableCell className="min-w-0 max-w-0">
-                            <div
-                              className="truncate text-sm font-medium"
-                              title={b.displayTitle}
-                            >
-                              {b.displayTitle}
-                            </div>
-                            <div
-                              className="truncate text-xs text-muted-foreground"
-                              title={b.authors ?? undefined}
-                            >
-                              {b.authors ?? '—'}
-                            </div>
-                          </TableCell>
-                          <TableCell className="w-[72px] text-right">
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              className="h-7 gap-1 px-2 text-xs"
-                              onClick={() => openEditorFromHiddenList(b.md5)}
-                            >
-                              <Pencil
-                                className="size-3 opacity-80"
-                                aria-hidden
-                              />
-                              Edit
-                            </Button>
-                          </TableCell>
+                  <>
+                    <BooksPagination
+                      className="mb-3 px-1"
+                      page={hiddenPage}
+                      pageSize={
+                        hiddenBooksPage.data?.pageSize ?? BOOKS_LIST_PAGE_SIZE
+                      }
+                      total={hiddenTotal}
+                      onPageChange={setHiddenPage}
+                    />
+                    <Table className="table-fixed">
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="w-[72px]" />
+                          <TableHead className="min-w-0">Title</TableHead>
+                          <TableHead className="w-[72px]" />
                         </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
+                      </TableHeader>
+                      <TableBody>
+                        {hiddenRows.map((b, i) => (
+                          <TableRow
+                            key={b.md5}
+                            className={cn(i % 2 === 1 && 'bg-muted/40')}
+                          >
+                            <TableCell className="w-[72px] align-middle">
+                              <BookCoverThumb
+                                coverUrl={b.coverUrl}
+                                displayTitle={b.displayTitle}
+                              />
+                            </TableCell>
+                            <TableCell className="min-w-0 max-w-0">
+                              <div
+                                className="truncate text-sm font-medium"
+                                title={b.displayTitle}
+                              >
+                                {b.displayTitle}
+                              </div>
+                              <div
+                                className="truncate text-xs text-muted-foreground"
+                                title={b.authors ?? undefined}
+                              >
+                                {b.authors ?? '—'}
+                              </div>
+                            </TableCell>
+                            <TableCell className="w-[72px] text-right">
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="h-7 gap-1 px-2 text-xs"
+                                onClick={() => openEditorFromHiddenList(b)}
+                              >
+                                <Pencil
+                                  className="size-3 opacity-80"
+                                  aria-hidden
+                                />
+                                Edit
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </>
                 )}
               </div>
               <div className="shrink-0 border-t border-border/60 px-5 py-3">

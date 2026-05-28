@@ -1,5 +1,6 @@
 import type {
   BookListItem,
+  BookListPage,
   CoverCandidate,
   IsbnCandidate,
 } from '@kobuddy/common';
@@ -13,6 +14,16 @@ export type ListBooksParams = {
   shelf?: boolean;
   showHidden?: boolean;
 };
+
+export type BooksPageParams = {
+  page: number;
+  pageSize?: number;
+  q?: string;
+  sort?: 'lastOpen';
+  hiddenOnly?: boolean;
+};
+
+export type AdminBooksPageParams = BooksPageParams;
 
 function booksListPath(params?: ListBooksParams): string {
   if (!params) return '/api/books';
@@ -33,8 +44,20 @@ export function fetchHomeShelfBooks(): Promise<BookListItem[]> {
   return fetchBooks({ sort: 'lastOpen', limit: 8, shelf: true });
 }
 
-export function fetchAdminBooks(): Promise<BookListItem[]> {
-  return fetchBooks({ sort: 'lastOpen', showHidden: true });
+export function fetchBooksPage(params: BooksPageParams): Promise<BookListPage> {
+  const q = new URLSearchParams();
+  q.set('page', String(params.page));
+  if (params.sort) q.set('sort', params.sort);
+  if (params.pageSize != null) q.set('pageSize', String(params.pageSize));
+  if (params.q?.trim()) q.set('q', params.q.trim());
+  if (params.hiddenOnly) q.set('hiddenOnly', 'true');
+  return apiJson<BookListPage>(`/api/books?${q.toString()}`);
+}
+
+export function fetchAdminBooksPage(
+  params: AdminBooksPageParams,
+): Promise<BookListPage> {
+  return fetchBooksPage({ ...params, sort: 'lastOpen' });
 }
 
 export type UpdateBookPayload = {

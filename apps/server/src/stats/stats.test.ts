@@ -148,8 +148,7 @@ describe('aggregates (timezone-aware month / weekday)', () => {
 describe('statsOverview', () => {
   it('returns zeros and empty structures with no reading data', async () => {
     const db = createInMemoryDb();
-    const cfg = testAppConfig();
-    const o = await statsOverview(db, cfg, 'UTC');
+    const o = await statsOverview(db, 'UTC');
     expect(o.totalReadingTimeSeconds).toBe(0);
     expect(o.totalPagesRead).toBe(0);
     expect(o.calendar).toEqual([]);
@@ -159,8 +158,7 @@ describe('statsOverview', () => {
 
   it('persists overview in stats_cache after compute', async () => {
     const db = createInMemoryDb();
-    const cfg = testAppConfig();
-    await statsOverview(db, cfg, 'UTC');
+    await statsOverview(db, 'UTC');
     const rows = await db
       .select()
       .from(statsCache)
@@ -170,9 +168,8 @@ describe('statsOverview', () => {
 
   it('second overview request reads from cache (same snapshot key)', async () => {
     const db = createInMemoryDb();
-    const cfg = testAppConfig();
-    const a = await statsOverview(db, cfg, 'UTC');
-    const b = await statsOverview(db, cfg, 'UTC');
+    const a = await statsOverview(db, 'UTC');
+    const b = await statsOverview(db, 'UTC');
     expect(b.totalReadingTimeSeconds).toBe(a.totalReadingTimeSeconds);
     const rows = await db
       .select()
@@ -194,8 +191,7 @@ describe('statsCalendar', () => {
       duration: 300,
       totalPages: 100,
     });
-    const cfg = testAppConfig();
-    const o = await statsOverview(db, cfg, 'Europe/Berlin');
+    const o = await statsOverview(db, 'Europe/Berlin');
     const cal = await statsCalendar(db, 'Europe/Berlin');
     expect(cal.calendar).toEqual(o.calendar);
   });

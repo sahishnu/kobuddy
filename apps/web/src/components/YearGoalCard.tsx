@@ -107,11 +107,8 @@ export function YearGoalCard({
               {booksFinishedThisLocalYear}
             </p>
             <p className="text-center text-sm text-muted-foreground">
-              Books finished this year. Set{' '}
-              <span className="font-medium text-foreground">
-                READING_GOAL_BOOKS
-              </span>{' '}
-              for a ring target.
+              Books finished this year. Set a year goal in Library admin
+              preferences for a progress ring.
             </p>
           </>
         )}

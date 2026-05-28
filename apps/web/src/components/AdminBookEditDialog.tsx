@@ -166,8 +166,8 @@ export function AdminBookEditDialog({
                           onLoad={() => setCoverBroken(false)}
                         />
                       ) : (
-                        <span className="px-2 text-center text-[11px] text-muted-foreground">
-                          No cover
+                        <span className="px-2 text-center text-[11px] font-medium leading-snug text-muted-foreground line-clamp-6">
+                          {book.displayTitle}
                         </span>
                       )}
                     </div>

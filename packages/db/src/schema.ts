@@ -103,6 +103,12 @@ export const statsCache = sqliteTable('stats_cache', {
   computedAt: integer('computed_at').notNull(),
 });
 
+/** Admin-set target number of books to finish in a calendar year. */
+export const readingGoal = sqliteTable('reading_goal', {
+  year: integer('year').primaryKey(),
+  books: integer('books').notNull(),
+});
+
 export const deviceRelations = relations(device, ({ many }) => ({
   bookDevices: many(bookDevice),
   pageStats: many(pageStat),
@@ -143,3 +149,4 @@ export type Device = typeof device.$inferSelect;
 export type Book = typeof book.$inferSelect;
 export type BookDevice = typeof bookDevice.$inferSelect;
 export type PageStat = typeof pageStat.$inferSelect;
+export type ReadingGoal = typeof readingGoal.$inferSelect;

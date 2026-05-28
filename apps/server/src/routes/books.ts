@@ -1,10 +1,13 @@
 import { zValidator } from '@hono/zod-validator';
-import type { BookDetail, BookListItem } from '@kobuddy/common';
+import type { BookDetail, BookListItem, BookListPage } from '@kobuddy/common';
 import { Hono } from 'hono';
 import { z } from 'zod';
 import {
+  ADMIN_BOOKS_DEFAULT_PAGE_SIZE,
+  ADMIN_BOOKS_MAX_PAGE_SIZE,
   getBook,
   listBooks,
+  listBooksPage,
   setBookHidden,
   updateBook,
 } from '../books/index.js';
@@ -60,6 +63,45 @@ export function booksRouter(cfg: AppConfig, db: DbClient) {
     );
     const sort = c.req.query('sort');
     const shelfMode = c.req.query('shelf') === 'true';
+    const pageRaw = c.req.query('page');
+    const pageParsed = pageRaw ? Number.parseInt(pageRaw, 10) : NaN;
+
+    if (Number.isFinite(pageParsed) && pageParsed > 0) {
+      const pageSizeRaw = c.req.query('pageSize');
+      const pageSizeParsed = pageSizeRaw
+        ? Number.parseInt(pageSizeRaw, 10)
+        : NaN;
+      const pageSize =
+        Number.isFinite(pageSizeParsed) && pageSizeParsed > 0
+          ? Math.min(ADMIN_BOOKS_MAX_PAGE_SIZE, pageSizeParsed)
+          : ADMIN_BOOKS_DEFAULT_PAGE_SIZE;
+      const search =
+        c.req.query('q')?.trim() || c.req.query('search')?.trim() || undefined;
+      const hiddenOnly = Boolean(
+        session.isAdmin && c.req.query('hiddenOnly') === 'true',
+      );
+      const pageShowHidden =
+        hiddenOnly ||
+        Boolean(session.isAdmin && c.req.query('showHidden') === 'true');
+
+      const result = await listBooksPage(db, {
+        showHidden: pageShowHidden,
+        hiddenOnly,
+        sort: sort === 'lastOpen' ? 'lastOpen' : undefined,
+        page: pageParsed,
+        pageSize,
+        search,
+      });
+      const body: BookListPage = {
+        ...result,
+        items: result.items.map((b) => ({
+          ...b,
+          coverUrl: bookCoverUrl(b.md5, b.coverPath),
+        })),
+      };
+      return c.json(body);
+    }
+
     const limitRaw = c.req.query('limit');
     const limitParsed = limitRaw ? Number.parseInt(limitRaw, 10) : NaN;
     const limit =

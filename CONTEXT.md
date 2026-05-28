@@ -41,11 +41,11 @@ Crisp definitions for domain terms. Architecture language (module, seam, adapter
 
 - Any DTO that crosses the HTTP seam between `apps/server` and `apps/web` lives in `@kobuddy/common` and is imported by both sides. Do not redefine these types in web or infer them locally.
 - Server-local types (Drizzle row shapes, ingest policy internals, module-internal return types that never hit the wire) stay in the module.
-- Wire-facing DTOs currently in `@kobuddy/common`: `StatsOverview`, `StatsByBook`, `CalendarDay`, `CurrentReadingBook`, `PerMonthReadingTime`, `PerDayOfTheWeek`, `WeekDayReading`, `HourlyReadingBlock`, `BookListItem`, `BookDetail`, `KoreaderBook`, `PageStatPayload`, `IngestPayload`, `DevicePayload`.
+- Wire-facing DTOs currently in `@kobuddy/common`: `StatsOverview`, `StatsByBook`, `CalendarDay`, `CurrentReadingBook`, `PerMonthReadingTime`, `PerDayOfTheWeek`, `WeekDayReading`, `HourlyReadingBlock`, `ReadingGoalResponse`, `BookListItem`, `BookListPage`, `BookDetail`, `KoreaderBook`, `PageStatPayload`, `IngestPayload`, `DevicePayload`.
 
 ## Config knobs
 
 - `PUBLIC_READ` — if true, `/api/books` and `/api/stats` are public GETs; mutations still require admin session.
 - `INGEST_TOKEN` — Bearer on `/api/ingest/*` POSTs from Devices.
 - `REQUIRED_PLUGIN_VERSION` — enforced on plugin-initiated ingest payloads.
-- `READING_GOAL_BOOKS` — optional annual books goal surfaced in `StatsOverview`.
+- Annual books goal is stored in `reading_goal` (per calendar year); admins set it from Library admin; surfaced in `StatsOverview.readingGoalBooksPerYear`. The goal year matches the dashboard’s `timeZone` (same as `booksFinishedThisLocalYear`). The removed `READING_GOAL_BOOKS` env var is not imported automatically; use Library admin or `apps/server/scripts/migrate-reading-goal-from-env.ts` once after upgrading.

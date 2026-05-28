@@ -67,7 +67,7 @@ export type StatsOverview = {
   calendar: CalendarDay[];
   /** IANA timezone used for calendar, streaks, week, and hourly aggregates. */
   statsTimeZone: string;
-  /** From env `READING_GOAL_BOOKS`; null if unset. */
+  /** Admin-set books target for the current local calendar year; null if unset. */
   readingGoalBooksPerYear: number | null;
   /** Distinct books with a last-page session in the current local calendar year. */
   booksFinishedThisLocalYear: number;

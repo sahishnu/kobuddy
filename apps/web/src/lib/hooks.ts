@@ -1,8 +1,10 @@
 export { useLogin, useLogout, useMe } from './hooks/auth.js';
 export {
-  useAdminBooksList,
-  useBooksList,
+  BOOKS_LIST_PAGE_SIZE,
+  useAdminBooksPage,
+  useBooksPage,
   useHomeShelfBooks,
 } from './hooks/books.js';
 export { useImportKoreaderSqlite } from './hooks/import.js';
+export { useReadingGoal, useSetReadingGoal } from './hooks/reading-goals.js';
 export { useStatsOverview } from './hooks/stats.js';

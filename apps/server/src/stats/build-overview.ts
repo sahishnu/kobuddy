@@ -3,7 +3,6 @@ import {
   type CurrentReadingBookRow,
   currentReadingBook,
 } from '../books/index.js';
-import type { AppConfig } from '../config.js';
 import type { DbClient } from '../lib/db.js';
 import { bookCoverUrl } from '../lib/urls.js';
 import {
@@ -30,6 +29,7 @@ import {
   totalPagesRead,
   visibleBookAuthorCounts,
 } from './stats-queries.js';
+import { localYear } from './stats-tz.js';
 
 export type OverviewBuildInput = {
   stats: PageStatForDashboard[];
@@ -76,7 +76,7 @@ function currentBookFromRow(row: CurrentReadingBookRow): CurrentReadingBook {
  */
 export function buildStatsOverview(
   input: OverviewBuildInput,
-  cfg: AppConfig,
+  readingGoalBooksPerYear: number | null,
   timeZone: string,
   nowMs: number,
 ): StatsOverview {
@@ -91,13 +91,7 @@ export function buildStatsOverview(
   const calendar = calendarByDayInZone(stats, timeZone);
   const streaks = streaksFromCalendarDays(calendar, nowMs, timeZone);
   const hourly = hourlyReadingProfile(stats, timeZone);
-  const localYear = Number.parseInt(
-    new Intl.DateTimeFormat('en-US', {
-      timeZone,
-      year: 'numeric',
-    }).format(new Date(nowMs)),
-    10,
-  );
+  const year = localYear(Math.floor(nowMs / 1000), timeZone);
 
   return {
     totalReadingTimeSeconds: totalReadingTime(stats),
@@ -111,10 +105,10 @@ export function buildStatsOverview(
     last7DaysReadTimeSeconds: last7DaysReadTime(stats, timeZone, nowMs),
     calendar,
     statsTimeZone: timeZone,
-    readingGoalBooksPerYear: cfg.READING_GOAL_BOOKS ?? null,
+    readingGoalBooksPerYear,
     booksFinishedThisLocalYear: booksFinishedInLocalYear(
       stats,
-      localYear,
+      year,
       timeZone,
       completedBooks,
     ),

@@ -3,6 +3,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
+import { formatHour12, formatHourRange12 } from '@/lib/format';
 import { BentoCard } from './BentoCard';
 
 type Props = {
@@ -50,7 +51,7 @@ export function HourlyReadingChart({
             {HOURS_0_23.map((hour) => {
               const mins = averageMinutesByHour[hour] ?? 0;
               const hgt = Math.max(2, (mins / max) * barH);
-              const tip = `${hour}:00–${hour + 1}:00 · ~${mins} min / day avg`;
+              const tip = `${formatHourRange12(hour)} · ~${mins} min / day avg`;
               return (
                 <div
                   key={hour}
@@ -86,7 +87,7 @@ export function HourlyReadingChart({
               <div key={h} className="flex min-w-0 justify-center">
                 {TICK_HOUR_SET.has(h) ? (
                   <span className="text-[10px] tabular-nums text-muted-foreground">
-                    {h}h
+                    {formatHour12(h)}
                   </span>
                 ) : null}
               </div>

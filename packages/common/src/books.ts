@@ -45,6 +45,14 @@ export type BookListItem = {
   coverUrl: string | null;
 };
 
+/** Paginated `GET /api/books` response when `page` is set. */
+export type BookListPage = {
+  items: BookListItem[];
+  total: number;
+  page: number;
+  pageSize: number;
+};
+
 /**
  * The `book` object inside `GET /api/books/:md5` (full `Book` row plus display fields).
  * After JSON serialization, `createdAt` is an ISO 8601 string.

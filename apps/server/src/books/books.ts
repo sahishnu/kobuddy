@@ -23,31 +23,124 @@ export async function getBookRow(
   return b ?? null;
 }
 
+export const ADMIN_BOOKS_DEFAULT_PAGE_SIZE = 25;
+export const ADMIN_BOOKS_MAX_PAGE_SIZE = 100;
+
 export type ListBooksOptions = {
   showHidden: boolean;
+  /** When true, only hidden books (admin). Ignored if `showHidden` is false and not admin paginated. */
+  hiddenOnly?: boolean;
   sort?: 'lastOpen';
   shelfMode: boolean;
   limit?: number;
+  offset?: number;
+  search?: string;
 };
 
-export async function listBooks(
-  db: DbClient,
-  opts: ListBooksOptions,
-): Promise<Omit<BookListItem, 'coverUrl'>[]> {
-  const { showHidden, sort, shelfMode, limit } = opts;
+export type ListBooksPageOptions = Omit<
+  ListBooksOptions,
+  'limit' | 'offset' | 'shelfMode'
+> & {
+  page: number;
+  pageSize: number;
+};
 
-  let excludeCurrentMd5: string | null = null;
-  if (shelfMode) {
-    const cur = await currentReadingBook(db);
-    excludeCurrentMd5 = cur?.md5 ?? null;
-  }
+type ListBookRow = {
+  md5: string;
+  title: string | null;
+  customTitle: string | null;
+  authors: string | null;
+  series: string | null;
+  language: string | null;
+  isbn: string | null;
+  hidden: boolean;
+  completedAt: number | null;
+  coverPath: string | null;
+  coverSource: string | null;
+  maxLastOpen: number | null;
+  totalReadTime: number;
+  totalReadPages: number;
+  pages: number;
+  percentComplete: number;
+};
 
+function bookSearchCondition(needle: string) {
+  const n = needle.toLowerCase();
+  return sql`instr(lower(
+    coalesce(${book.title}, '') || ' ' ||
+    coalesce(${book.customTitle}, '') || ' ' ||
+    coalesce(${book.authors}, '') || ' ' ||
+    coalesce(${book.series}, '') || ' ' ||
+    coalesce(${book.isbn}, '') || ' ' ||
+    ${book.md5}
+  ), ${n}) > 0`;
+}
+
+function buildListBooksWhere(
+  opts: Pick<ListBooksOptions, 'showHidden' | 'hiddenOnly' | 'search'>,
+  excludeCurrentMd5: string | null,
+  shelfMode: boolean,
+) {
   const whereParts = [];
-  if (!showHidden) whereParts.push(eq(book.hidden, false));
+  if (opts.hiddenOnly) {
+    whereParts.push(eq(book.hidden, true));
+  } else if (!opts.showHidden) {
+    whereParts.push(eq(book.hidden, false));
+  }
   if (shelfMode && excludeCurrentMd5) {
     whereParts.push(ne(book.md5, excludeCurrentMd5));
   }
-  const whereClause = and(...whereParts) ?? sql`true`;
+  const search = opts.search?.trim();
+  if (search) whereParts.push(bookSearchCondition(search));
+  return and(...whereParts) ?? sql`true`;
+}
+
+function mapListBookRows(
+  rows: ListBookRow[],
+): Omit<BookListItem, 'coverUrl'>[] {
+  return rows.map((b) => {
+    const { maxLastOpen, ...rest } = b;
+    return {
+      ...rest,
+      lastOpen: mapLastOpenForWire(maxLastOpen ?? 0),
+      completed: b.completedAt != null,
+      displayTitle: displayTitle(b),
+    };
+  });
+}
+
+async function countListBooks(
+  db: DbClient,
+  whereClause: ReturnType<typeof buildListBooksWhere>,
+  shelfMode: boolean,
+): Promise<number> {
+  if (!shelfMode) {
+    const [row] = await db
+      .select({
+        count: sql<number>`count(distinct ${book.md5})`.mapWith(Number),
+      })
+      .from(book)
+      .leftJoin(bookDevice, eq(bookDevice.bookMd5, book.md5))
+      .where(whereClause);
+    return row?.count ?? 0;
+  }
+  const rows = await db
+    .select({ md5: book.md5 })
+    .from(book)
+    .leftJoin(bookDevice, eq(bookDevice.bookMd5, book.md5))
+    .where(whereClause)
+    .groupBy(book.md5)
+    .having(shelfEligibleHaving());
+  return rows.length;
+}
+
+async function queryListBookRows(
+  db: DbClient,
+  opts: ListBooksOptions,
+  excludeCurrentMd5: string | null,
+): Promise<ListBookRow[]> {
+  const { sort, shelfMode, limit, offset } = opts;
+  const whereClause = buildListBooksWhere(opts, excludeCurrentMd5, shelfMode);
 
   let q = db
     .select({
@@ -96,17 +189,61 @@ export async function listBooks(
   if (limit != null) {
     q = q.limit(limit);
   }
+  if (offset != null && offset > 0) {
+    q = q.offset(offset);
+  }
 
-  const rows = await q;
-  return rows.map((b) => {
-    const { maxLastOpen, ...rest } = b;
-    return {
-      ...rest,
-      lastOpen: mapLastOpenForWire(maxLastOpen),
-      completed: b.completedAt != null,
-      displayTitle: displayTitle(b),
-    };
-  });
+  return q;
+}
+
+export async function listBooks(
+  db: DbClient,
+  opts: ListBooksOptions,
+): Promise<Omit<BookListItem, 'coverUrl'>[]> {
+  const { shelfMode } = opts;
+
+  let excludeCurrentMd5: string | null = null;
+  if (shelfMode) {
+    const cur = await currentReadingBook(db);
+    excludeCurrentMd5 = cur?.md5 ?? null;
+  }
+
+  const rows = await queryListBookRows(db, opts, excludeCurrentMd5);
+  return mapListBookRows(rows);
+}
+
+export async function listBooksPage(
+  db: DbClient,
+  opts: ListBooksPageOptions,
+): Promise<{
+  items: Omit<BookListItem, 'coverUrl'>[];
+  total: number;
+  page: number;
+  pageSize: number;
+}> {
+  const page = Math.max(1, opts.page);
+  const pageSize = Math.min(
+    ADMIN_BOOKS_MAX_PAGE_SIZE,
+    Math.max(1, opts.pageSize),
+  );
+  const offset = (page - 1) * pageSize;
+  const listOpts: ListBooksOptions = {
+    ...opts,
+    shelfMode: false,
+    limit: pageSize,
+    offset,
+  };
+  const whereClause = buildListBooksWhere(listOpts, null, false);
+  const [total, rows] = await Promise.all([
+    countListBooks(db, whereClause, false),
+    queryListBookRows(db, listOpts, null),
+  ]);
+  return {
+    items: mapListBookRows(rows),
+    total,
+    page,
+    pageSize,
+  };
 }
 
 export type GetBookResult = {

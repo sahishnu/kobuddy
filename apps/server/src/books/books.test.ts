@@ -13,7 +13,13 @@ import {
   seedPageStat,
 } from '../test-util/seed.js';
 import { testAppConfig } from '../test-util/test-config.js';
-import { getBook, listBooks, setBookHidden, updateBook } from './books.js';
+import {
+  getBook,
+  listBooks,
+  listBooksPage,
+  setBookHidden,
+  updateBook,
+} from './books.js';
 import { SHELF_MIN_READ_PAGES } from './constants.js';
 
 function mockSession(isAdmin: boolean): IronSession<SessionData> {
@@ -102,6 +108,71 @@ describe('listBooks', () => {
       limit: 1,
     });
     expect(rows).toHaveLength(1);
+  });
+
+  it('paginates visible books for admin', async () => {
+    const db = createInMemoryDb();
+    seedDevice(db);
+    for (const letter of ['a', 'b', 'c']) {
+      seedBook(db, { md5: letter, title: letter.toUpperCase() });
+      seedBookDevice(db, {
+        bookMd5: letter,
+        pages: 10,
+        totalReadPages: 5,
+        lastOpen: letter === 'c' ? 300 : letter === 'b' ? 200 : 100,
+      });
+    }
+    const page1 = await listBooksPage(db, {
+      showHidden: false,
+      page: 1,
+      pageSize: 2,
+      sort: 'lastOpen',
+    });
+    expect(page1.total).toBe(3);
+    expect(page1.items).toHaveLength(2);
+    expect(page1.items[0]?.md5).toBe('c');
+    const page2 = await listBooksPage(db, {
+      showHidden: false,
+      page: 2,
+      pageSize: 2,
+      sort: 'lastOpen',
+    });
+    expect(page2.items).toHaveLength(1);
+    expect(page2.items[0]?.md5).toBe('a');
+  });
+
+  it('filters by search needle', async () => {
+    const db = createInMemoryDb();
+    seedDevice(db);
+    seedBook(db, { md5: 'match', title: 'Unique Zebra Title' });
+    seedBook(db, { md5: 'other', title: 'Other' });
+    seedBookDevice(db, { bookMd5: 'match', pages: 10, totalReadPages: 1 });
+    seedBookDevice(db, { bookMd5: 'other', pages: 10, totalReadPages: 1 });
+    const result = await listBooksPage(db, {
+      showHidden: false,
+      page: 1,
+      pageSize: 25,
+      search: 'zebra',
+    });
+    expect(result.total).toBe(1);
+    expect(result.items[0]?.md5).toBe('match');
+  });
+
+  it('lists only hidden books when hiddenOnly is set', async () => {
+    const db = createInMemoryDb();
+    seedDevice(db);
+    seedBook(db, { md5: 'vis', title: 'V' });
+    seedBook(db, { md5: 'hid', title: 'Hidden One', hidden: true });
+    seedBookDevice(db, { bookMd5: 'vis', pages: 10, totalReadPages: 5 });
+    seedBookDevice(db, { bookMd5: 'hid', pages: 10, totalReadPages: 5 });
+    const result = await listBooksPage(db, {
+      showHidden: true,
+      hiddenOnly: true,
+      page: 1,
+      pageSize: 25,
+    });
+    expect(result.total).toBe(1);
+    expect(result.items[0]?.md5).toBe('hid');
   });
 
   it('sorts by lastOpen when requested', async () => {
@@ -249,6 +320,120 @@ describe('setBookHidden', () => {
     await setBookHidden(db, 'h1', true);
     const [row] = await db.select().from(book).where(eq(book.md5, 'h1'));
     expect(row?.hidden).toBe(true);
+  });
+});
+
+describe('GET /api/books pagination', () => {
+  it('returns BookListPage when page query is set', async () => {
+    const db = createInMemoryDb();
+    const cfg = testAppConfig({ PUBLIC_READ: true });
+    seedDevice(db);
+    seedBook(db, { md5: 'a', title: 'A' });
+    seedBook(db, { md5: 'b', title: 'B' });
+    seedBookDevice(db, { bookMd5: 'a', pages: 10, totalReadPages: 5 });
+    seedBookDevice(db, { bookMd5: 'b', pages: 10, totalReadPages: 5 });
+
+    const app = new Hono<AppEnv>();
+    app.use('*', async (c, next) => {
+      c.set('session', mockSession(true));
+      await next();
+    });
+    app.route('/books', booksRouter(cfg, db));
+
+    const res = await app.request('http://t/books?page=1&pageSize=1');
+    expect(res.status).toBe(200);
+    const data = (await res.json()) as {
+      items: { md5: string }[];
+      total: number;
+      page: number;
+      pageSize: number;
+    };
+    expect(data.total).toBe(2);
+    expect(data.items).toHaveLength(1);
+    expect(data.page).toBe(1);
+    expect(data.pageSize).toBe(1);
+  });
+
+  it('returns BookListPage for anonymous readers when PUBLIC_READ is true', async () => {
+    const db = createInMemoryDb();
+    const cfg = testAppConfig({ PUBLIC_READ: true });
+    seedDevice(db);
+    seedBook(db, { md5: 'a', title: 'A' });
+    seedBook(db, { md5: 'b', title: 'B' });
+    seedBookDevice(db, { bookMd5: 'a', pages: 10, totalReadPages: 5 });
+    seedBookDevice(db, { bookMd5: 'b', pages: 10, totalReadPages: 5 });
+
+    const app = new Hono<AppEnv>();
+    app.use('*', async (c, next) => {
+      c.set('session', mockSession(false));
+      await next();
+    });
+    app.route('/books', booksRouter(cfg, db));
+
+    const res = await app.request('http://t/books?page=1&pageSize=1');
+    expect(res.status).toBe(200);
+    const data = (await res.json()) as {
+      items: { md5: string }[];
+      total: number;
+    };
+    expect(data.total).toBe(2);
+    expect(data.items).toHaveLength(1);
+  });
+
+  it('honors showHidden=true on paginated admin requests', async () => {
+    const db = createInMemoryDb();
+    const cfg = testAppConfig({ PUBLIC_READ: true });
+    seedDevice(db);
+    seedBook(db, { md5: 'vis', title: 'Visible' });
+    seedBook(db, { md5: 'hid', title: 'Hidden', hidden: true });
+    seedBookDevice(db, { bookMd5: 'vis', pages: 10, totalReadPages: 5 });
+    seedBookDevice(db, { bookMd5: 'hid', pages: 10, totalReadPages: 5 });
+
+    const app = new Hono<AppEnv>();
+    app.use('*', async (c, next) => {
+      c.set('session', mockSession(true));
+      await next();
+    });
+    app.route('/books', booksRouter(cfg, db));
+
+    const res = await app.request(
+      'http://t/books?page=1&pageSize=25&showHidden=true',
+    );
+    expect(res.status).toBe(200);
+    const data = (await res.json()) as {
+      items: { md5: string }[];
+      total: number;
+    };
+    expect(data.total).toBe(2);
+    expect(data.items.map((b) => b.md5).sort()).toEqual(['hid', 'vis']);
+  });
+
+  it('ignores hiddenOnly for non-admin', async () => {
+    const db = createInMemoryDb();
+    const cfg = testAppConfig({ PUBLIC_READ: true });
+    seedDevice(db);
+    seedBook(db, { md5: 'vis', title: 'Visible' });
+    seedBook(db, { md5: 'hid', title: 'Hidden', hidden: true });
+    seedBookDevice(db, { bookMd5: 'vis', pages: 10, totalReadPages: 5 });
+    seedBookDevice(db, { bookMd5: 'hid', pages: 10, totalReadPages: 5 });
+
+    const app = new Hono<AppEnv>();
+    app.use('*', async (c, next) => {
+      c.set('session', mockSession(false));
+      await next();
+    });
+    app.route('/books', booksRouter(cfg, db));
+
+    const res = await app.request(
+      'http://t/books?page=1&pageSize=25&hiddenOnly=true',
+    );
+    expect(res.status).toBe(200);
+    const data = (await res.json()) as {
+      items: { md5: string }[];
+      total: number;
+    };
+    expect(data.total).toBe(1);
+    expect(data.items[0]?.md5).toBe('vis');
   });
 });
 
