@@ -4,16 +4,16 @@ import { type Context, Hono } from 'hono';
 import type { z } from 'zod';
 import type { AppConfig } from '../config.js';
 import {
-  deviceIdFromMultipartField,
   ingestFromJson,
-  ingestFromKoreaderSqlite,
+  ingestKoreaderSqliteFromMultipart,
+  KoreaderSqliteMultipartError,
   registerDevice,
 } from '../ingest/index.js';
+import { afterStatsAffectingMutation } from '../lib/after-stats-affecting-mutation.js';
 import { clientIp } from '../lib/client-ip.js';
 import type { DbClient } from '../lib/db.js';
 import { ingestLog } from '../lib/logger.js';
 import { requireIngestToken } from '../middleware/require-bearer.js';
-import { invalidateStatsCache } from '../stats/index.js';
 
 function withPluginVersion<T extends z.ZodType>(cfg: AppConfig, schema: T) {
   return schema.superRefine((val, ctx) => {
@@ -84,7 +84,6 @@ export function ingestRouter(cfg: AppConfig, db: DbClient) {
       const body = c.req.valid('json');
       try {
         await registerDevice(db, body.id, body.model);
-        await invalidateStatsCache(db);
       } catch (e) {
         ingestLog.error(
           {
@@ -123,9 +122,10 @@ export function ingestRouter(cfg: AppConfig, db: DbClient) {
       const body = c.req.valid('json');
       let pageStatsFiltered: number | undefined;
       try {
-        const r = ingestFromJson(db, body.books, body.stats);
+        const r = await afterStatsAffectingMutation(db, () =>
+          ingestFromJson(db, body.books, body.stats),
+        );
         pageStatsFiltered = r.pageStatsFiltered;
-        await invalidateStatsCache(db);
       } catch (e) {
         ingestLog.error(
           {
@@ -162,22 +162,13 @@ export function ingestRouter(cfg: AppConfig, db: DbClient) {
   r.post('/import-sqlite', requireIngestToken(cfg), async (c) => {
     try {
       const body = await c.req.parseBody({ all: true });
-      const file = body.file;
-      if (!(file instanceof File)) {
-        ingestLog.warn(
-          { route: '/import-sqlite', ip: clientIp(c) },
-          'sqlite import missing multipart "file" field',
-        );
-        return c.json({ error: 'Expected multipart field "file"' }, 400);
-      }
-      const deviceId = deviceIdFromMultipartField(body.device_id);
-      const result = await ingestFromKoreaderSqlite(db, file, deviceId);
-      await invalidateStatsCache(db);
+      const result = await afterStatsAffectingMutation(db, () =>
+        ingestKoreaderSqliteFromMultipart(db, body),
+      );
       ingestLog.info(
         {
           route: '/import-sqlite',
           ip: clientIp(c),
-          deviceId,
           booksImported: result.booksImported,
           pageStatsImported: result.pageStatsImported,
           pageStatsFiltered: result.pageStatsFiltered,
@@ -191,6 +182,13 @@ export function ingestRouter(cfg: AppConfig, db: DbClient) {
         pageStatsFiltered: result.pageStatsFiltered,
       });
     } catch (e) {
+      if (e instanceof KoreaderSqliteMultipartError) {
+        ingestLog.warn(
+          { route: '/import-sqlite', ip: clientIp(c) },
+          'sqlite import missing multipart "file" field',
+        );
+        return c.json({ error: e.message }, 400);
+      }
       const msg = e instanceof Error ? e.message : 'Import failed';
       ingestLog.error(
         {

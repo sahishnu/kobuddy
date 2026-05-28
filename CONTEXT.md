@@ -35,7 +35,7 @@ Crisp definitions for domain terms. Architecture language (module, seam, adapter
 - **One clock per response**: the timezone passed to `StatsOverview` applies to every civil-calendar field it contains. There is no server-local clock mixed in.
 - **Hidden is structural**: the `hidden` filter is applied at the module interface for Visible queries, not repeated by callers.
 - **showHidden is admin-only**: `GET /api/books?showHidden=true` lists hidden books only when the session is an admin session; otherwise the flag is ignored and only visible books are returned (even under `PUBLIC_READ`).
-- **Ingest → cache**: cache invalidation follows a successful Ingest. Ingest itself does not know about the cache.
+- **Stats cache**: after any mutation that changes data used to build `StatsOverview` (ingest, book hide/completion/metadata, covers), routes call `afterStatsAffectingMutation` in `apps/server/src/lib/after-stats-affecting-mutation.ts` to clear the cache. Domain modules (including Ingest) do not import cache code. Device registration alone does not invalidate the cache.
 
 ## Interface reuse
 

@@ -5,7 +5,10 @@ import { statsCache } from '@kobuddy/db/schema';
 import Database from 'better-sqlite3';
 import { eq } from 'drizzle-orm';
 import { Hono } from 'hono';
+import type { IronSession } from 'iron-session';
 import { describe, expect, it } from 'vitest';
+import type { AppEnv, SessionData } from '../middleware/session.js';
+import { booksRouter } from '../routes/books.js';
 import { ingestRouter } from '../routes/ingest.js';
 import { createInMemoryDb } from '../test-util/in-memory-db.js';
 import { seedBook, seedDevice, seedPageStat } from '../test-util/seed.js';
@@ -237,7 +240,11 @@ describe('statsForBook', () => {
   });
 });
 
-describe('ingest routes invalidate stats cache', () => {
+function mockSession(isAdmin: boolean): IronSession<SessionData> {
+  return { isAdmin } as IronSession<SessionData>;
+}
+
+describe('stats cache invalidation on mutations', () => {
   const cfg = testAppConfig();
 
   async function seedCacheRow(db: ReturnType<typeof createInMemoryDb>) {
@@ -249,7 +256,7 @@ describe('ingest routes invalidate stats cache', () => {
     });
   }
 
-  it('POST /ingest/device clears stats_cache', async () => {
+  it('POST /ingest/device does not clear stats_cache', async () => {
     const db = createInMemoryDb();
     await seedCacheRow(db);
     const app = new Hono();
@@ -268,7 +275,7 @@ describe('ingest routes invalidate stats cache', () => {
     });
     expect(res.status).toBe(200);
     const left = await db.select().from(statsCache);
-    expect(left).toHaveLength(0);
+    expect(left).toHaveLength(1);
   });
 
   it('POST /ingest/import clears stats_cache', async () => {
@@ -333,6 +340,57 @@ describe('ingest routes invalidate stats cache', () => {
       method: 'POST',
       headers: { Authorization: `Bearer ${cfg.INGEST_TOKEN}` },
       body: fd,
+    });
+    expect(res.status).toBe(200);
+    const left = await db.select().from(statsCache);
+    expect(left).toHaveLength(0);
+  });
+
+  it('POST /books/import-sqlite clears stats_cache on success', async () => {
+    const db = createInMemoryDb();
+    await seedCacheRow(db);
+    const app = new Hono<AppEnv>();
+    app.use('*', async (c, next) => {
+      c.set('session', mockSession(true));
+      await next();
+    });
+    app.route('/books', booksRouter(cfg, db));
+
+    const buf = buildMinimalKoreaderSqliteBuffer();
+    const fd = new FormData();
+    fd.set(
+      'file',
+      new File([buf], 'statistics.sqlite3', {
+        type: 'application/octet-stream',
+      }),
+    );
+
+    const res = await app.request('http://t/books/import-sqlite', {
+      method: 'POST',
+      body: fd,
+    });
+    expect(res.status).toBe(200);
+    const left = await db.select().from(statsCache);
+    expect(left).toHaveLength(0);
+  });
+
+  it('PUT /books/:md5/hide clears stats_cache', async () => {
+    const db = createInMemoryDb();
+    await seedCacheRow(db);
+    seedDevice(db);
+    seedBook(db, { md5: 'hide-me', title: 'T' });
+
+    const app = new Hono<AppEnv>();
+    app.use('*', async (c, next) => {
+      c.set('session', mockSession(true));
+      await next();
+    });
+    app.route('/books', booksRouter(cfg, db));
+
+    const res = await app.request('http://t/books/hide-me/hide', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ hidden: true }),
     });
     expect(res.status).toBe(200);
     const left = await db.select().from(statsCache);

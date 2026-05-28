@@ -154,3 +154,23 @@ export async function registerDevice(db: DbClient, id: string, model: string) {
       set: { model: sql`excluded.model` },
     });
 }
+
+export class KoreaderSqliteMultipartError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'KoreaderSqliteMultipartError';
+  }
+}
+
+/** Shared multipart → sqlite ingest path for plugin and admin upload routes. */
+export async function ingestKoreaderSqliteFromMultipart(
+  db: DbClient,
+  body: Record<string, string | File | (string | File)[]>,
+): Promise<IngestResult> {
+  const file = body.file;
+  if (!(file instanceof File)) {
+    throw new KoreaderSqliteMultipartError('Expected multipart field "file"');
+  }
+  const deviceId = deviceIdFromMultipartField(body.device_id);
+  return ingestFromKoreaderSqlite(db, file, deviceId);
+}

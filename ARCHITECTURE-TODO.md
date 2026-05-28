@@ -363,6 +363,15 @@ Shared steps: `parseBody` → validate `file` → `deviceIdFromMultipartField` �
 
 PR 2 chose composition-root invalidation (good); PR 3 noted duplicate admin vs plugin import paths but did not unify.
 
+**Completion notes (2026-05-28)**
+
+- `lib/after-stats-affecting-mutation.ts` — composition-root invalidation with optional `invalidate(result)` predicate.
+- `ingestKoreaderSqliteFromMultipart` in `ingest/index.ts` — shared multipart sqlite path; used by ingest + admin books routes.
+- Removed cache bust on `POST /ingest/device` (device rows do not affect `StatsOverview`).
+- Book admin mutations (hide, update, covers, ISBN auto, import-sqlite) use the helper; failed cover/ISBN auto does not invalidate.
+- `seed-dev-data.ts` imports `invalidateStatsCache` from `stats/index.js`.
+- Tests: `after-stats-affecting-mutation.test.ts`; stats route tests for ingest import/sqlite, books import-sqlite, hide; device no longer clears cache.
+
 ---
 
 ## A5 — Single `coverUrl` mapping at HTTP seam
@@ -498,6 +507,6 @@ _Tick candidates when done; add notes below each._
 - [x] **A1** BookDevice rollup consolidation
 - [x] **A2** StatsOverview one clock (+ build-overview pipeline)
 - [x] **A3** Cover module deepening
-- [ ] **A4** Ingest + cache composition
+- [x] **A4** Ingest + cache composition
 - [x] **A5** coverUrl helper
 - [ ] **A6** Web API module

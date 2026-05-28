@@ -20,15 +20,15 @@ import {
   serveCoverBytesForBook,
 } from '../covers/index.js';
 import {
-  deviceIdFromMultipartField,
-  ingestFromKoreaderSqlite,
+  ingestKoreaderSqliteFromMultipart,
+  KoreaderSqliteMultipartError,
 } from '../ingest/index.js';
+import { afterStatsAffectingMutation } from '../lib/after-stats-affecting-mutation.js';
 import type { DbClient } from '../lib/db.js';
 import { bookCoverUrl } from '../lib/urls.js';
 import { requireAdmin } from '../middleware/require-admin.js';
 import { requirePublicReadOrAdmin } from '../middleware/require-public-or-admin.js';
 import type { AppEnv } from '../middleware/session.js';
-import { invalidateStatsCache } from '../stats/index.js';
 
 const hideBody = z.object({ hidden: z.boolean() });
 
@@ -83,13 +83,9 @@ export function booksRouter(cfg: AppConfig, db: DbClient) {
   r.post('/import-sqlite', requireAdmin, async (c) => {
     try {
       const body = await c.req.parseBody({ all: true });
-      const file = body.file;
-      if (!(file instanceof File)) {
-        return c.json({ error: 'Expected multipart field "file"' }, 400);
-      }
-      const deviceId = deviceIdFromMultipartField(body.device_id);
-      const result = await ingestFromKoreaderSqlite(db, file, deviceId);
-      await invalidateStatsCache(db);
+      const result = await afterStatsAffectingMutation(db, () =>
+        ingestKoreaderSqliteFromMultipart(db, body),
+      );
       return c.json({
         ok: true,
         message: 'Import successful',
@@ -98,6 +94,9 @@ export function booksRouter(cfg: AppConfig, db: DbClient) {
         pageStatsFiltered: result.pageStatsFiltered,
       });
     } catch (e) {
+      if (e instanceof KoreaderSqliteMultipartError) {
+        return c.json({ error: e.message }, 400);
+      }
       const msg = e instanceof Error ? e.message : 'Import failed';
       return c.json({ error: msg }, 400);
     }
@@ -120,11 +119,10 @@ export function booksRouter(cfg: AppConfig, db: DbClient) {
     zValidator('json', coverAutoBody),
     async (c) => {
       const md5 = c.req.param('md5');
-      const result = await applyAutoCoverForBook(
+      const result = await afterStatsAffectingMutation(
         db,
-        cfg,
-        md5,
-        c.req.valid('json'),
+        () => applyAutoCoverForBook(db, cfg, md5, c.req.valid('json')),
+        { invalidate: (r) => r.ok },
       );
       if (!result.ok) {
         if (result.error === 'not_found')
@@ -159,13 +157,15 @@ export function booksRouter(cfg: AppConfig, db: DbClient) {
     const maxBytes = cfg.MAX_COVER_MB * 1024 * 1024;
     const buf = Buffer.from(await file.arrayBuffer());
     if (buf.length > maxBytes) return c.json({ error: 'File too large' }, 400);
-    await applyCustomCover(db, cfg, md5, buf);
+    await afterStatsAffectingMutation(db, () =>
+      applyCustomCover(db, cfg, md5, buf),
+    );
     return c.json({ ok: true });
   });
 
   r.delete('/:md5/cover', requireAdmin, async (c) => {
     const md5 = c.req.param('md5');
-    await deleteCover(db, cfg, md5);
+    await afterStatsAffectingMutation(db, () => deleteCover(db, cfg, md5));
     return c.json({ ok: true });
   });
 
@@ -186,11 +186,10 @@ export function booksRouter(cfg: AppConfig, db: DbClient) {
     zValidator('json', isbnAutoBody),
     async (c) => {
       const md5 = c.req.param('md5');
-      const result = await applyIsbnAutoForBook(
+      const result = await afterStatsAffectingMutation(
         db,
-        cfg,
-        md5,
-        c.req.valid('json'),
+        () => applyIsbnAutoForBook(db, cfg, md5, c.req.valid('json')),
+        { invalidate: (r) => r.ok },
       );
       if (!result.ok) {
         if (result.error === 'not_found')
@@ -208,7 +207,7 @@ export function booksRouter(cfg: AppConfig, db: DbClient) {
   r.put('/:md5/hide', requireAdmin, zValidator('json', hideBody), async (c) => {
     const md5 = c.req.param('md5');
     const { hidden } = c.req.valid('json');
-    await setBookHidden(db, md5, hidden);
+    await afterStatsAffectingMutation(db, () => setBookHidden(db, md5, hidden));
     return c.json({ ok: true });
   });
 
@@ -251,13 +250,21 @@ export function booksRouter(cfg: AppConfig, db: DbClient) {
         completedAt: completedAtOverride,
         ...rest
       } = c.req.valid('json');
-      const result = await updateBook(db, md5, {
-        ...rest,
-        completed,
-        completedAt: completedAtOverride,
-      });
+      const result = await afterStatsAffectingMutation(
+        db,
+        async () => {
+          const result = await updateBook(db, md5, {
+            ...rest,
+            completed,
+            completedAt: completedAtOverride,
+          });
+          if (!result.found) return result;
+          await applyCoverPolicyAfterBookUpdate(db, cfg, md5, result);
+          return result;
+        },
+        { invalidate: (r) => r.found },
+      );
       if (!result.found) return c.json({ error: 'Not found' }, 404);
-      await applyCoverPolicyAfterBookUpdate(db, cfg, md5, result);
       return c.json({ ok: true });
     },
   );

@@ -15,7 +15,7 @@ import fs from 'node:fs';
 import { config } from '../config.js';
 import { createDatabase } from '../lib/db.js';
 import { resolveSqlitePath } from '../lib/paths.js';
-import { invalidateStatsCache } from '../stats/stats-cache.js';
+import { invalidateStatsCache } from '../stats/index.js';
 import {
   seedBook,
   seedBookDevice,
