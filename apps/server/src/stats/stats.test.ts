@@ -10,7 +10,13 @@ import { ingestRouter } from '../routes/ingest.js';
 import { createInMemoryDb } from '../test-util/in-memory-db.js';
 import { seedBook, seedDevice, seedPageStat } from '../test-util/seed.js';
 import { testAppConfig } from '../test-util/test-config.js';
-import { getPerMonthReadingTime, perDayOfTheWeek } from './aggregates.js';
+import {
+  getPerMonthReadingTime,
+  last7DaysReadTime,
+  longestDay,
+  mostPagesInADay,
+  perDayOfTheWeek,
+} from './aggregates.js';
 import { statsCalendar, statsForBook, statsOverview } from './index.js';
 
 function buildMinimalKoreaderSqliteBuffer(): Buffer {
@@ -87,6 +93,52 @@ describe('aggregates (timezone-aware month / weekday)', () => {
     const laDow = perDayOfTheWeek([row], 'America/Los_Angeles');
     expect(utcDow[0]?.name).toBe('Monday');
     expect(laDow[0]?.name).toBe('Sunday');
+  });
+
+  it('longestDay buckets by civil day in the caller time zone', () => {
+    const rowA = {
+      startTime: Math.floor(Date.parse('2024-01-31T23:00:00Z') / 1000),
+      duration: 100,
+      totalPages: 10,
+      bookMd5: 'a',
+    };
+    const rowB = {
+      startTime: Math.floor(Date.parse('2024-02-01T01:00:00Z') / 1000),
+      duration: 200,
+      totalPages: 10,
+      bookMd5: 'a',
+    };
+    expect(longestDay([rowA, rowB], 'UTC')).toBe(200);
+    expect(longestDay([rowA, rowB], 'Asia/Tokyo')).toBe(300);
+  });
+
+  it('mostPagesInADay counts stat rows per civil day in the caller time zone', () => {
+    const rowA = {
+      startTime: Math.floor(Date.parse('2024-01-31T23:00:00Z') / 1000),
+      duration: 1,
+      totalPages: 10,
+      bookMd5: 'a',
+    };
+    const rowB = {
+      startTime: Math.floor(Date.parse('2024-02-01T01:00:00Z') / 1000),
+      duration: 1,
+      totalPages: 10,
+      bookMd5: 'b',
+    };
+    expect(mostPagesInADay([rowA, rowB], 'UTC')).toBe(1);
+    expect(mostPagesInADay([rowA, rowB], 'Asia/Tokyo')).toBe(2);
+  });
+
+  it('last7DaysReadTime uses civil last-7-days window in the caller time zone', () => {
+    const nowMs = Date.parse('2024-06-10T12:00:00Z');
+    const row = {
+      startTime: Math.floor(Date.parse('2024-06-03T20:00:00Z') / 1000),
+      duration: 90,
+      totalPages: 1,
+      bookMd5: 'x',
+    };
+    expect(last7DaysReadTime([row], 'UTC', nowMs)).toBe(0);
+    expect(last7DaysReadTime([row], 'Asia/Tokyo', nowMs)).toBe(90);
   });
 });
 

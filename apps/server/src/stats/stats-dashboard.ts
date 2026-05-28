@@ -1,6 +1,7 @@
 import type { CalendarDay, WeekDayReading } from '@kobuddy/common';
 import type { StatRow } from './aggregates.js';
 import {
+  addGregorianDays,
   isoWeekYearAndWeek,
   localHour,
   localIsoWeekKey,
@@ -9,18 +10,7 @@ import {
   localYmdParts,
 } from './stats-tz.js';
 
-/** Add calendar days to a `yyyy-MM-dd` string (civil Gregorian). */
-export function addGregorianDays(ymd: string, delta: number): string {
-  const parts = ymd.split('-').map(Number);
-  const yy = parts[0] ?? 0;
-  const mm = parts[1] ?? 0;
-  const dd = parts[2] ?? 0;
-  const t = new Date(Date.UTC(yy, mm - 1, dd + delta, 12, 0, 0));
-  const y = t.getUTCFullYear();
-  const m = String(t.getUTCMonth() + 1).padStart(2, '0');
-  const d = String(t.getUTCDate()).padStart(2, '0');
-  return `${y}-${m}-${d}`;
-}
+export { addGregorianDays };
 
 export type PageStatForDashboard = StatRow & {
   page: number;

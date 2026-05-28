@@ -1,5 +1,6 @@
-import { book, bookDevice, pageStat } from '@kobuddy/db/schema';
-import { and, eq, isNotNull, sql } from 'drizzle-orm';
+import { book, pageStat } from '@kobuddy/db/schema';
+import { and, eq, isNotNull } from 'drizzle-orm';
+import { totalPagesReadVisible } from '../books/book-device-aggregates.js';
 import type { DbClient } from '../lib/db.js';
 import type { PageStatForDashboard } from './stats-dashboard.js';
 
@@ -21,16 +22,7 @@ export async function loadVisiblePageStats(
 }
 
 export async function totalPagesRead(db: DbClient): Promise<number> {
-  const rows = await db
-    .select({
-      bookMd5: bookDevice.bookMd5,
-      mx: sql<number>`max(${bookDevice.totalReadPages})`.mapWith(Number),
-    })
-    .from(bookDevice)
-    .innerJoin(book, eq(book.md5, bookDevice.bookMd5))
-    .where(eq(book.hidden, false))
-    .groupBy(bookDevice.bookMd5);
-  return rows.reduce((acc, row) => acc + (row.mx ?? 0), 0);
+  return totalPagesReadVisible(db);
 }
 
 export async function visibleBookAuthorCounts(

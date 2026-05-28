@@ -3,7 +3,13 @@ import { book, bookDevice, pageStat } from '@kobuddy/db/schema';
 import { and, asc, desc, eq, ne, sql } from 'drizzle-orm';
 import type { DbClient } from '../lib/db.js';
 import { displayTitle } from '../lib/display.js';
-import { SHELF_MIN_READ_PAGES } from './constants.js';
+import {
+  mapLastOpenForWire,
+  maxLastOpenAgg,
+  maxPagesAgg,
+  maxReadAgg,
+  shelfEligibleHaving,
+} from './book-device-aggregates.js';
 import { currentReadingBook } from './current-reading.js';
 
 export type ListBooksOptions = {
@@ -25,13 +31,6 @@ export async function listBooks(
     excludeCurrentMd5 = cur?.md5 ?? null;
   }
 
-  const lastOpenAgg =
-    sql<number>`max(coalesce(${bookDevice.lastOpen}, 0))`.mapWith(Number);
-  const maxReadAgg = sql<number>`max(${bookDevice.totalReadPages})`.mapWith(
-    Number,
-  );
-  const maxPagesAgg = sql<number>`max(${bookDevice.pages})`.mapWith(Number);
-
   const whereParts = [];
   if (!showHidden) whereParts.push(eq(book.hidden, false));
   if (shelfMode && excludeCurrentMd5) {
@@ -52,16 +51,13 @@ export async function listBooks(
       completedAt: book.completedAt,
       coverPath: book.coverPath,
       coverSource: book.coverSource,
-      lastOpen: sql<number>`max(${bookDevice.lastOpen})`.mapWith(Number),
+      maxLastOpen: maxLastOpenAgg,
       totalReadTime:
         sql<number>`coalesce(sum(${bookDevice.totalReadTime}), 0)`.mapWith(
           Number,
         ),
-      totalReadPages:
-        sql<number>`coalesce(max(${bookDevice.totalReadPages}), 0)`.mapWith(
-          Number,
-        ),
-      pages: sql<number>`coalesce(max(${bookDevice.pages}), 0)`.mapWith(Number),
+      totalReadPages: sql<number>`coalesce(${maxReadAgg}, 0)`.mapWith(Number),
+      pages: sql<number>`coalesce(${maxPagesAgg}, 0)`.mapWith(Number),
       percentComplete:
         sql<number>`coalesce(max(case when ${bookDevice.pages} > 0 then ${bookDevice.totalReadPages} * 100 / ${bookDevice.pages} else 0 end), 0)`.mapWith(
           Number,
@@ -74,13 +70,11 @@ export async function listBooks(
     .$dynamic();
 
   if (shelfMode) {
-    q = q.having(
-      sql`(${maxReadAgg} >= ${SHELF_MIN_READ_PAGES} OR (${maxPagesAgg} > 0 AND ${maxReadAgg} >= ${maxPagesAgg}))`,
-    );
+    q = q.having(shelfEligibleHaving());
   }
 
   if (sort === 'lastOpen') {
-    q = q.orderBy(desc(lastOpenAgg), book.md5);
+    q = q.orderBy(desc(maxLastOpenAgg), book.md5);
   } else {
     q = q.orderBy(
       asc(sql`lower(coalesce(${book.title}, ${book.customTitle}, ''))`),
@@ -93,11 +87,15 @@ export async function listBooks(
   }
 
   const rows = await q;
-  return rows.map((b) => ({
-    ...b,
-    completed: b.completedAt != null,
-    displayTitle: displayTitle(b),
-  }));
+  return rows.map((b) => {
+    const { maxLastOpen, ...rest } = b;
+    return {
+      ...rest,
+      lastOpen: mapLastOpenForWire(maxLastOpen),
+      completed: b.completedAt != null,
+      displayTitle: displayTitle(b),
+    };
+  });
 }
 
 export type GetBookResult = {

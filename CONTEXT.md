@@ -7,6 +7,7 @@ Crisp definitions for domain terms. Architecture language (module, seam, adapter
 - **Device** — a reading app / piece of hardware. Identified by `device.id` sent from ingest (KOReader plugin uses a hardware id). The literal id `unknown-device` is reserved for ingest that can't attribute a Device (bulk SQLite import without a device hint, or JSON import whose `stats[].device_id` is all empty).
 - **Book** — one row per KOReader-style document fingerprint (`book.md5`). `title` / `authors` / `series` / `language` come from KOReader; `customTitle` / `isbn` / `hidden` / `completedAt` / `coverPath` are our layer.
 - **BookDevice** — the per-`Device` rollup for a `Book`: progress counts, last open, reading time. Composite PK `(bookMd5, deviceId)`. A Book read on two Devices has two BookDevice rows; consumers usually want `max(...)` across them.
+- **BookDevice aggregate (per Book)** — for a given Book, the rollup across its BookDevice rows: `max(totalReadPages)`, `max(pages)`, `max(coalesce(lastOpen, 0))`, plus `completedAt` from the Book row. Visible-book rollups live in `apps/server/src/books/book-device-aggregates.ts`. Shelf eligibility, Currently Reading selection, and `StatsOverview.totalPagesRead` all use this rollup (SQL fragments and/or loaded rows).
 - **PageStat** — a single KOReader reading segment mirrored from `page_stat_data`. Uniqueness: `(deviceId, bookMd5, page, startTime)`. Re-ingest updates `duration` / `totalPages` on conflict.
 
 ## Domain concepts

@@ -2,6 +2,8 @@
 
 Use this file with `CONTEXT.md` when continuing in a new chat. **Tick and annotate each PR as it lands.**
 
+**Follow-on work (post PR 1–7):** see [`ARCHITECTURE-TODO.md`](./ARCHITECTURE-TODO.md) for the next deepening candidates, priorities, and agent handoff detail.
+
 ---
 
 ## Ordering rationale

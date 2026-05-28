@@ -1,7 +1,6 @@
 import type { PerDayOfTheWeek, PerMonthReadingTime } from '@kobuddy/common';
-import { startOfDay, subDays } from 'date-fns';
 import { groupBy, sum } from 'ramda';
-import { localYmdParts } from './stats-tz.js';
+import { addGregorianDays, localYmd, localYmdParts } from './stats-tz.js';
 
 /** Page stats with `startTime` as Unix seconds (KOReader). */
 export type StatRow = {
@@ -13,23 +12,17 @@ export type StatRow = {
   deviceId?: string;
 };
 
-export type BookRow = {
-  md5: string;
-  totalReadPages: number;
-};
-
 function toMs(seconds: number): Date {
   return new Date(seconds * 1000);
 }
 
-function getPagesPerDay(stats: StatRow[]): number[] {
-  const statsPerDay = groupBy((stat: StatRow) =>
-    startOfDay(toMs(stat.startTime)).getTime().toString(),
-  )(stats);
-
-  return Object.values(statsPerDay).map(
-    (dayStats) => dayStats?.reduce((acc) => acc + 1, 0) ?? 0,
+function getPagesPerDay(stats: StatRow[], timeZone: string): number[] {
+  const statsPerDay = groupBy(
+    (stat: StatRow) => localYmd(stat.startTime, timeZone),
+    stats,
   );
+
+  return Object.values(statsPerDay).map((dayStats) => dayStats?.length ?? 0);
 }
 
 /**
@@ -121,8 +114,8 @@ export function perDayOfTheWeek(
     }));
 }
 
-export function mostPagesInADay(stats: StatRow[]): number {
-  const max = Math.round(Math.max(...getPagesPerDay(stats), 0));
+export function mostPagesInADay(stats: StatRow[], timeZone: string): number {
+  const max = Math.round(Math.max(...getPagesPerDay(stats, timeZone), 0));
   return Math.max(0, max);
 }
 
@@ -130,25 +123,31 @@ export function totalReadingTime(stats: StatRow[]): number {
   return sum((stats ?? []).map((s) => s.duration));
 }
 
-export function longestDay(stats: StatRow[]): number {
-  const timePerDay = stats.reduce<Record<number, number>>((acc, stat) => {
-    const day = startOfDay(toMs(stat.startTime)).getTime();
-    acc[day] = (acc[day] || 0) + stat.duration;
-    return acc;
-  }, {});
-  const values = Object.values(timePerDay);
+export function longestDay(stats: StatRow[], timeZone: string): number {
+  const timePerDay = new Map<string, number>();
+  for (const stat of stats) {
+    const key = localYmd(stat.startTime, timeZone);
+    timePerDay.set(key, (timePerDay.get(key) ?? 0) + stat.duration);
+  }
+  const values = [...timePerDay.values()];
   if (values.length === 0) return 0;
   return Math.max(0, Math.max(...values));
 }
 
-export function last7DaysReadTime(stats: StatRow[]): number {
-  const sevenDaysAgo = subDays(new Date(), 7);
-  const lastSevenDays = stats.filter(
-    (stat) => toMs(stat.startTime) > sevenDaysAgo,
-  );
-  return sum(lastSevenDays.map((s) => s.duration));
-}
-
-export function totalPagesRead(books: BookRow[]): number {
-  return books.reduce((acc, b) => acc + (b.totalReadPages ?? 0), 0);
+/** Sum reading time on the last 7 civil calendar days in `timeZone` (today inclusive). */
+export function last7DaysReadTime(
+  stats: StatRow[],
+  timeZone: string,
+  nowMs: number = Date.now(),
+): number {
+  const todayYmd = localYmd(Math.floor(nowMs / 1000), timeZone);
+  const oldestYmd = addGregorianDays(todayYmd, -6);
+  let total = 0;
+  for (const stat of stats) {
+    const ymd = localYmd(stat.startTime, timeZone);
+    if (ymd >= oldestYmd && ymd <= todayYmd) {
+      total += stat.duration;
+    }
+  }
+  return total;
 }
