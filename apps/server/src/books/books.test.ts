@@ -203,6 +203,29 @@ describe('updateBook', () => {
     });
   });
 
+  it('normalizes hyphenated ISBN on update', async () => {
+    const db = createInMemoryDb();
+    seedBook(db, { md5: 'i3', title: 'T' });
+    await updateBook(db, 'i3', { isbn: '978-0-306-40615-7' });
+    const [row] = await db.select().from(book).where(eq(book.md5, 'i3'));
+    expect(row?.isbn).toBe('9780306406157');
+  });
+
+  it('does not flag isbnChanged when normalized value is unchanged', async () => {
+    const db = createInMemoryDb();
+    seedBook(db, { md5: 'i4', title: 'T' });
+    await db
+      .update(book)
+      .set({ isbn: '9780306406157' })
+      .where(eq(book.md5, 'i4'));
+    const r = await updateBook(db, 'i4', { isbn: '978-0-306-40615-7' });
+    expect(r).toMatchObject({
+      found: true,
+      isbnChanged: false,
+      nextIsbn: '9780306406157',
+    });
+  });
+
   it('does not flag isbnChanged when ISBN unchanged', async () => {
     const db = createInMemoryDb();
     seedBook(db, { md5: 'i2', title: 'T' });

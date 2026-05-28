@@ -47,6 +47,7 @@ export function createGoogleBooksProvider(): CoverProvider {
         : '';
       const gv = await fetchJson<GoogleVolumesResponse>(
         `https://www.googleapis.com/books/v1/volumes?q=${gq}&maxResults=10${keyParam}`,
+        { provider: 'googlebooks' },
       );
       for (const item of gv?.items ?? []) {
         const vi = item.volumeInfo;
@@ -80,6 +81,7 @@ export function createGoogleBooksProvider(): CoverProvider {
         : '';
       const gv = await fetchJson<GoogleVolumesResponse>(
         `https://www.googleapis.com/books/v1/volumes?q=${gq}&maxResults=12${keyParam}`,
+        { provider: 'googlebooks' },
       );
       for (const item of gv?.items ?? []) {
         const vi = item.volumeInfo;
@@ -115,6 +117,7 @@ export function createGoogleBooksProvider(): CoverProvider {
           : '';
         const vol = await fetchJson<{ volumeInfo?: GoogleVolumeInfo }>(
           `https://www.googleapis.com/books/v1/volumes/${encodeURIComponent(candidate.providerId)}${keyParam}`,
+          { provider: 'googlebooks' },
         );
         const vi = vol?.volumeInfo;
         const thumb =

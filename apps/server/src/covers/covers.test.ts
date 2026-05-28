@@ -9,12 +9,14 @@ import { createInMemoryDb } from '../test-util/in-memory-db.js';
 import { seedBook } from '../test-util/seed.js';
 import { testAppConfig } from '../test-util/test-config.js';
 import {
+  applyAutoCoverForBook,
   applyCoverCandidate,
   applyCustomCover,
+  applyIsbnAutoForBook,
   autoCoverAfterIsbnChange,
+  coverCandidatesForBook,
   deleteCover,
-  listCoverCandidates,
-  listIsbnCandidates,
+  isbnCandidatesForBook,
   readCoverBytes,
 } from './index.js';
 import { coverRelPath } from './storage.js';
@@ -36,7 +38,7 @@ describe('covers façade', () => {
     vi.restoreAllMocks();
   });
 
-  it('listCoverCandidates merges mocked provider responses', async () => {
+  it('coverCandidatesForBook merges mocked provider responses', async () => {
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
       const url = String(input);
       if (url.includes('openlibrary.org/search.json')) {
@@ -59,16 +61,47 @@ describe('covers façade', () => {
       }
       return new Response('{}', { status: 404 });
     });
+    const db = createInMemoryDb();
     const { cfg, cleanup } = tmpCfg();
     try {
-      const list = await listCoverCandidates(cfg, 'OL Title', 'Auth', null);
-      expect(list.some((c) => c.providerId === 'id:42')).toBe(true);
+      seedBook(db, { md5: 'bc1', title: 'Stored', authors: 'Auth' });
+      const result = await coverCandidatesForBook(db, cfg, 'bc1');
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.candidates.some((c) => c.providerId === 'id:42')).toBe(
+          true,
+        );
+      }
     } finally {
       cleanup();
     }
   });
 
-  it('listIsbnCandidates returns deduped ISBN rows', async () => {
+  it('coverCandidatesForBook uses query override for search title', async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockImplementation(async (input) => {
+        const url = String(input);
+        if (url.includes('openlibrary.org/search.json')) {
+          expect(url).toContain('Override%20Title');
+          return new Response(JSON.stringify({ docs: [] }), { status: 200 });
+        }
+        return new Response(JSON.stringify({ items: [] }), { status: 200 });
+      });
+    const db = createInMemoryDb();
+    const { cfg, cleanup } = tmpCfg();
+    try {
+      seedBook(db, { md5: 'bc2', title: 'Stored' });
+      await coverCandidatesForBook(db, cfg, 'bc2', {
+        query: 'Override Title',
+      });
+      expect(fetchMock).toHaveBeenCalled();
+    } finally {
+      cleanup();
+    }
+  });
+
+  it('isbnCandidatesForBook returns deduped ISBN rows', async () => {
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
       const url = String(input);
       if (url.includes('openlibrary.org/search.json')) {
@@ -88,11 +121,80 @@ describe('covers façade', () => {
       }
       return new Response(JSON.stringify({ items: [] }), { status: 200 });
     });
+    const db = createInMemoryDb();
     const { cfg, cleanup } = tmpCfg();
     try {
-      const list = await listIsbnCandidates(cfg, 'Book', 'P');
-      expect(list).toHaveLength(1);
-      expect(list[0].isbn).toBe('9780306406157');
+      seedBook(db, { md5: 'bi1', title: 'Book', authors: 'P' });
+      const result = await isbnCandidatesForBook(db, cfg, 'bi1');
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.candidates).toHaveLength(1);
+        expect(result.candidates[0].isbn).toBe('9780306406157');
+      }
+    } finally {
+      cleanup();
+    }
+  });
+
+  it('applyAutoCoverForBook picks first candidate when body is empty', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.includes('openlibrary.org/search.json')) {
+        return new Response(
+          JSON.stringify({
+            docs: [{ cover_i: 7, title: 'T', author_name: ['A'] }],
+          }),
+          { status: 200 },
+        );
+      }
+      if (url.includes('covers.openlibrary.org')) {
+        return new Response(Buffer.alloc(600), { status: 200 });
+      }
+      return new Response(JSON.stringify({ items: [] }), { status: 200 });
+    });
+    const db = createInMemoryDb();
+    const { cfg, cleanup } = tmpCfg();
+    try {
+      seedBook(db, { md5: 'ba1', title: 'T', authors: 'A' });
+      const result = await applyAutoCoverForBook(db, cfg, 'ba1');
+      expect(result).toEqual({ ok: true, coverSource: 'openlibrary:id:7' });
+    } finally {
+      cleanup();
+    }
+  });
+
+  it('applyIsbnAutoForBook updates ISBN via updateBook and fetches cover', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.includes('openlibrary.org/search.json')) {
+        return new Response(
+          JSON.stringify({
+            docs: [
+              {
+                cover_i: 12,
+                title: 'T',
+                author_name: ['A'],
+                isbn: ['9780306406157'],
+              },
+            ],
+          }),
+          { status: 200 },
+        );
+      }
+      if (url.includes('covers.openlibrary.org')) {
+        return new Response(Buffer.alloc(600), { status: 200 });
+      }
+      return new Response(JSON.stringify({ items: [] }), { status: 200 });
+    });
+    const db = createInMemoryDb();
+    const { cfg, cleanup } = tmpCfg();
+    try {
+      seedBook(db, { md5: 'bia1', title: 'T', authors: 'A' });
+      const result = await applyIsbnAutoForBook(db, cfg, 'bia1');
+      expect(result).toEqual({ ok: true, isbn: '9780306406157' });
+      const [row] = db.select().from(book).where(eq(book.md5, 'bia1')).all();
+      expect(row?.isbn).toBe('9780306406157');
+      expect(row?.coverSource).toBe('openlibrary:id:12');
     } finally {
       cleanup();
     }

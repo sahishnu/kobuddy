@@ -1,7 +1,5 @@
 import { zValidator } from '@hono/zod-validator';
 import type { BookDetail, BookListItem } from '@kobuddy/common';
-import { book } from '@kobuddy/db/schema';
-import { eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
 import {
@@ -12,21 +10,21 @@ import {
 } from '../books/index.js';
 import type { AppConfig } from '../config.js';
 import {
-  applyCoverCandidate,
+  applyAutoCoverForBook,
+  applyCoverPolicyAfterBookUpdate,
   applyCustomCover,
-  autoCoverAfterIsbnChange,
+  applyIsbnAutoForBook,
+  coverCandidatesForBook,
   deleteCover,
-  listCoverCandidates,
-  listIsbnCandidates,
-  normalizeIsbnForStorage,
-  readCoverBytes,
+  isbnCandidatesForBook,
+  serveCoverBytesForBook,
 } from '../covers/index.js';
 import {
   deviceIdFromMultipartField,
   ingestFromKoreaderSqlite,
 } from '../ingest/index.js';
 import type { DbClient } from '../lib/db.js';
-import { displayTitle } from '../lib/display.js';
+import { bookCoverUrl } from '../lib/urls.js';
 import { requireAdmin } from '../middleware/require-admin.js';
 import { requirePublicReadOrAdmin } from '../middleware/require-public-or-admin.js';
 import type { AppEnv } from '../middleware/session.js';
@@ -77,7 +75,7 @@ export function booksRouter(cfg: AppConfig, db: DbClient) {
     });
     const list: BookListItem[] = core.map((b) => ({
       ...b,
-      coverUrl: b.coverPath ? `/api/books/${b.md5}/cover` : null,
+      coverUrl: bookCoverUrl(b.md5, b.coverPath),
     }));
     return c.json(list);
   });
@@ -109,13 +107,11 @@ export function booksRouter(cfg: AppConfig, db: DbClient) {
 
   r.get('/:md5/cover/candidates', requireAdmin, async (c) => {
     const md5 = c.req.param('md5');
-    const [b] = await db.select().from(book).where(eq(book.md5, md5)).limit(1);
-    if (!b) return c.json({ error: 'Not found' }, 404);
-    const q = c.req.query('q');
-    const title = q || displayTitle(b);
-    const authors = b.authors ?? '';
-    const candidates = await listCoverCandidates(cfg, title, authors, b.isbn);
-    return c.json({ candidates });
+    const result = await coverCandidatesForBook(db, cfg, md5, {
+      query: c.req.query('q'),
+    });
+    if (!result.ok) return c.json({ error: 'Not found' }, 404);
+    return c.json({ candidates: result.candidates });
   });
 
   r.post(
@@ -124,49 +120,28 @@ export function booksRouter(cfg: AppConfig, db: DbClient) {
     zValidator('json', coverAutoBody),
     async (c) => {
       const md5 = c.req.param('md5');
-      const body = c.req.valid('json');
-      const [b] = await db
-        .select()
-        .from(book)
-        .where(eq(book.md5, md5))
-        .limit(1);
-      if (!b) return c.json({ error: 'Not found' }, 404);
-
-      let candidate = null;
-      if (body.provider && body.providerId) {
-        candidate = {
-          provider: body.provider,
-          providerId: body.providerId,
-          title: displayTitle(b),
-          authors: b.authors ?? '',
-          thumbnailUrl: body.thumbnailUrl,
-        };
-      } else {
-        const candidates = await listCoverCandidates(
-          cfg,
-          displayTitle(b),
-          b.authors ?? '',
-          b.isbn,
-        );
-        candidate = candidates[0] ?? null;
+      const result = await applyAutoCoverForBook(
+        db,
+        cfg,
+        md5,
+        c.req.valid('json'),
+      );
+      if (!result.ok) {
+        if (result.error === 'not_found')
+          return c.json({ error: 'Not found' }, 404);
+        if (result.error === 'no_cover')
+          return c.json({ error: 'No cover found' }, 404);
+        return c.json({ error: 'Download failed' }, 502);
       }
-      if (!candidate) return c.json({ error: 'No cover found' }, 404);
-      const ok = await applyCoverCandidate(db, cfg, md5, candidate);
-      if (!ok) return c.json({ error: 'Download failed' }, 502);
-      return c.json({
-        ok: true,
-        coverSource: `${candidate.provider}:${candidate.providerId}`,
-      });
+      return c.json({ ok: true, coverSource: result.coverSource });
     },
   );
 
   r.get('/:md5/cover', async (c) => {
     const md5 = c.req.param('md5');
-    const [b] = await db.select().from(book).where(eq(book.md5, md5)).limit(1);
-    if (!b?.coverPath) return c.body(null, 404);
-    const buf = await readCoverBytes(cfg, b.coverPath);
-    if (!buf) return c.body(null, 404);
-    return new Response(buf, {
+    const result = await serveCoverBytesForBook(db, cfg, md5);
+    if (!result.ok) return c.body(null, 404);
+    return new Response(result.bytes, {
       headers: {
         'Content-Type': 'image/jpeg',
         'Cache-Control': 'public, max-age=86400',
@@ -198,13 +173,11 @@ export function booksRouter(cfg: AppConfig, db: DbClient) {
 
   r.get('/:md5/isbn/candidates', requireAdmin, async (c) => {
     const md5 = c.req.param('md5');
-    const [b] = await db.select().from(book).where(eq(book.md5, md5)).limit(1);
-    if (!b) return c.json({ error: 'Not found' }, 404);
-    const q = c.req.query('q');
-    const title = q || displayTitle(b);
-    const authors = b.authors ?? '';
-    const candidates = await listIsbnCandidates(cfg, title, authors);
-    return c.json({ candidates });
+    const result = await isbnCandidatesForBook(db, cfg, md5, {
+      query: c.req.query('q'),
+    });
+    if (!result.ok) return c.json({ error: 'Not found' }, 404);
+    return c.json({ candidates: result.candidates });
   });
 
   r.post(
@@ -213,33 +186,20 @@ export function booksRouter(cfg: AppConfig, db: DbClient) {
     zValidator('json', isbnAutoBody),
     async (c) => {
       const md5 = c.req.param('md5');
-      const body = c.req.valid('json');
-      const [existing] = await db
-        .select()
-        .from(book)
-        .where(eq(book.md5, md5))
-        .limit(1);
-      if (!existing) return c.json({ error: 'Not found' }, 404);
-      const hadManualCover = existing.coverSource === 'manual';
-
-      let nextIsbn: string | null;
-      if (body.isbn) {
-        nextIsbn = normalizeIsbnForStorage(body.isbn);
-        if (!nextIsbn) return c.json({ error: 'Invalid ISBN' }, 400);
-      } else {
-        const list = await listIsbnCandidates(
-          cfg,
-          displayTitle(existing),
-          existing.authors ?? '',
-        );
-        const first = list[0];
-        if (!first) return c.json({ error: 'No ISBN found' }, 404);
-        nextIsbn = first.isbn;
+      const result = await applyIsbnAutoForBook(
+        db,
+        cfg,
+        md5,
+        c.req.valid('json'),
+      );
+      if (!result.ok) {
+        if (result.error === 'not_found')
+          return c.json({ error: 'Not found' }, 404);
+        if (result.error === 'invalid_isbn')
+          return c.json({ error: 'Invalid ISBN' }, 400);
+        return c.json({ error: 'No ISBN found' }, 404);
       }
-
-      await db.update(book).set({ isbn: nextIsbn }).where(eq(book.md5, md5));
-      await autoCoverAfterIsbnChange(db, cfg, md5, hadManualCover, nextIsbn);
-      return c.json({ ok: true, isbn: nextIsbn });
+      return c.json({ ok: true, isbn: result.isbn });
     },
   );
 
@@ -271,7 +231,7 @@ export function booksRouter(cfg: AppConfig, db: DbClient) {
       coverSource: bk.coverSource,
       createdAt: bk.createdAt.toISOString(),
       displayTitle: bk.displayTitle,
-      coverUrl: bk.coverPath ? `/api/books/${bk.md5}/cover` : null,
+      coverUrl: bookCoverUrl(bk.md5, bk.coverPath),
     };
     return c.json({
       book: bookOut,
@@ -297,15 +257,7 @@ export function booksRouter(cfg: AppConfig, db: DbClient) {
         completedAt: completedAtOverride,
       });
       if (!result.found) return c.json({ error: 'Not found' }, 404);
-      if (result.isbnChanged) {
-        await autoCoverAfterIsbnChange(
-          db,
-          cfg,
-          md5,
-          result.hadManualCover,
-          result.nextIsbn,
-        );
-      }
+      await applyCoverPolicyAfterBookUpdate(db, cfg, md5, result);
       return c.json({ ok: true });
     },
   );

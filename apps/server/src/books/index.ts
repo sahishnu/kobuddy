@@ -1,6 +1,8 @@
 export {
+  type BookRow,
   type GetBookResult,
   getBook,
+  getBookRow,
   type ListBooksOptions,
   listBooks,
   setBookHidden,

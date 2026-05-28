@@ -5,6 +5,7 @@ import {
 } from '../books/index.js';
 import type { AppConfig } from '../config.js';
 import type { DbClient } from '../lib/db.js';
+import { bookCoverUrl } from '../lib/urls.js';
 import {
   countUniqueAuthorTokens,
   getPerMonthReadingTime,
@@ -66,7 +67,7 @@ function currentBookFromRow(row: CurrentReadingBookRow): CurrentReadingBook {
     pages: row.pages,
     totalReadPages: row.totalReadPages,
     lastOpen: row.lastOpen,
-    coverUrl: row.coverPath ? `/api/books/${row.md5}/cover` : null,
+    coverUrl: bookCoverUrl(row.md5, row.coverPath),
   };
 }
 

@@ -295,6 +295,16 @@ Book list/detail already delegate to `listBooks` / `getBook` / `updateBook`; cov
 - No raw book fetch in cover handlers except inside Cover module.
 - Admin cover flow works E2E manually.
 
+**Completion notes (2026-05-27)**
+
+- `covers/book-covers.ts` — book-scoped candidates, auto cover/ISBN, `serveCoverBytesForBook`, `applyCoverPolicyAfterBookUpdate`.
+- `covers/cover-ops.ts` — apply/read/delete + `autoCoverAfterIsbnChange` (uses `getBookRow`).
+- Removed public `listCoverCandidates` / `listIsbnCandidates` pass-throughs.
+- `books/getBookRow`; `updateBook` normalizes ISBN via `normalizeIsbnForStorage`.
+- `lib/urls.ts` — `bookCoverUrl` used in books routes + `build-overview`.
+- `CurrentBookCard` — no client-side cover URL fallback.
+- Tests: `covers.test.ts` book-scoped cases, `urls.test.ts`, ISBN normalize in `books.test.ts`.
+
 ---
 
 ## A4 — Ingest composition + cache invalidation + shared import-sqlite
@@ -406,6 +416,8 @@ const coverSrc = book.coverUrl?.trim() || `/api/books/${book.md5}/cover`;
 - One function owns cover URL shape.
 - No duplicate template strings in routes/stats/web.
 
+**Completion notes (2026-05-27)** — Shipped with A3: `lib/urls.ts` (`bookCoverUrl`).
+
 ### REFACTOR-TODO note
 
 PR 5 deliberately placed mapping at “three route-layer one-liners” — this candidate centralizes that decision.
@@ -485,7 +497,7 @@ _Tick candidates when done; add notes below each._
 
 - [x] **A1** BookDevice rollup consolidation
 - [x] **A2** StatsOverview one clock (+ build-overview pipeline)
-- [ ] **A3** Cover module deepening
+- [x] **A3** Cover module deepening
 - [ ] **A4** Ingest + cache composition
-- [ ] **A5** coverUrl helper
+- [x] **A5** coverUrl helper
 - [ ] **A6** Web API module

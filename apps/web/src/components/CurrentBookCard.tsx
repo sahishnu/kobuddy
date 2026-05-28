@@ -13,7 +13,7 @@ type Props = {
 
 function CoverBlock({ book }: { book: CurrentReadingBook }) {
   const [failed, setFailed] = useState(false);
-  const coverSrc = book.coverUrl?.trim() || `/api/books/${book.md5}/cover`;
+  const coverSrc = book.coverUrl?.trim() || null;
 
   return (
     <div
@@ -22,7 +22,7 @@ function CoverBlock({ book }: { book: CurrentReadingBook }) {
         'shadow-lg ring-1 ring-black/10 dark:ring-white/10 sm:w-[11rem] md:w-[11.5rem]',
       )}
     >
-      {!failed ? (
+      {coverSrc && !failed ? (
         <img
           src={coverSrc}
           alt=""

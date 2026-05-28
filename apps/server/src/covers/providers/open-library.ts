@@ -14,6 +14,25 @@ type OlSearchDoc = {
 
 type OlSearchResponse = { docs?: OlSearchDoc[] };
 
+/** OL search omits `isbn` on docs unless requested via `fields`. */
+const OL_ISBN_SEARCH_FIELDS = 'key,title,author_name,first_publish_year,isbn';
+
+const OL_COVER_SEARCH_FIELDS =
+  'key,title,author_name,first_publish_year,cover_i';
+
+function olTitleAuthorSearchUrl(
+  title: string,
+  authors: string,
+  limit: number,
+  fields: string,
+): string {
+  const qTitle = encodeURIComponent(title || 'unknown');
+  const qAuthor = encodeURIComponent(
+    (authors || '').split(',')[0]?.trim() || '',
+  );
+  return `https://openlibrary.org/search.json?title=${qTitle}&author=${qAuthor}&limit=${limit}&fields=${encodeURIComponent(fields)}`;
+}
+
 export function createOpenLibraryProvider(): CoverProvider {
   return {
     name: 'openlibrary',
@@ -33,7 +52,7 @@ export function createOpenLibraryProvider(): CoverProvider {
             title?: string;
             authors?: { name?: string }[];
             covers?: number[];
-          }>(url);
+          }>(url, { provider: 'openlibrary' });
           if (data?.covers?.[0]) {
             out.push({
               provider: 'openlibrary',
@@ -50,12 +69,9 @@ export function createOpenLibraryProvider(): CoverProvider {
         }
       }
 
-      const qTitle = encodeURIComponent(title || 'unknown');
-      const qAuthor = encodeURIComponent(
-        (authors || '').split(',')[0]?.trim() || '',
-      );
       const ol = await fetchJson<OlSearchResponse>(
-        `https://openlibrary.org/search.json?title=${qTitle}&author=${qAuthor}&limit=12`,
+        olTitleAuthorSearchUrl(title, authors, 12, OL_COVER_SEARCH_FIELDS),
+        { provider: 'openlibrary' },
       );
       for (const doc of ol?.docs ?? []) {
         if (!doc.cover_i) continue;
@@ -78,12 +94,9 @@ export function createOpenLibraryProvider(): CoverProvider {
     }: CoverSearchInput): Promise<IsbnCandidate[]> {
       const out: IsbnCandidate[] = [];
 
-      const qTitle = encodeURIComponent(title || 'unknown');
-      const qAuthor = encodeURIComponent(
-        (authors || '').split(',')[0]?.trim() || '',
-      );
       const ol = await fetchJson<OlSearchResponse>(
-        `https://openlibrary.org/search.json?title=${qTitle}&author=${qAuthor}&limit=24`,
+        olTitleAuthorSearchUrl(title, authors, 24, OL_ISBN_SEARCH_FIELDS),
+        { provider: 'openlibrary' },
       );
       for (const doc of ol?.docs ?? []) {
         const normIsbn = pickPrimaryIsbnFromList(doc.isbn);

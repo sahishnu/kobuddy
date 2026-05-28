@@ -10,10 +10,14 @@ import pino from 'pino';
  */
 const isDev = process.env.NODE_ENV !== 'production';
 
-export const ingestLog = pino({
-  name: 'ingest',
+const logOptions = {
   level: isDev ? 'debug' : 'info',
   transport: isDev
     ? { target: 'pino-pretty', options: { colorize: true } }
     : undefined,
-});
+} as const;
+
+export const ingestLog = pino({ name: 'ingest', ...logOptions });
+
+/** Cover/ISBN provider lookups (Open Library, Google Books). */
+export const coversLog = pino({ name: 'covers', ...logOptions });

@@ -113,6 +113,19 @@ describe('createOpenLibraryProvider', () => {
     expect(buf).toBeNull();
   });
 
+  it('searchIsbnCandidates requests isbn in OL search fields', async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(
+        new Response(JSON.stringify({ docs: [] }), { status: 200 }),
+      );
+    const p = createOpenLibraryProvider();
+    await p.searchIsbnCandidates({ title: 'Dune', authors: 'Herbert' });
+    const url = String(fetchMock.mock.calls[0]?.[0]);
+    expect(url).toContain('fields=');
+    expect(decodeURIComponent(url)).toContain('isbn');
+  });
+
   it('searchIsbnCandidates maps OL isbn array via pickPrimaryIsbnFromList', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(
       new Response(

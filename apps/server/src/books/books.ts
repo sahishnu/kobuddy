@@ -1,6 +1,7 @@
 import type { BookDetail, BookListItem } from '@kobuddy/common';
 import { book, bookDevice, pageStat } from '@kobuddy/db/schema';
 import { and, asc, desc, eq, ne, sql } from 'drizzle-orm';
+import { normalizeIsbnForStorage } from '../covers/isbn.js';
 import type { DbClient } from '../lib/db.js';
 import { displayTitle } from '../lib/display.js';
 import {
@@ -11,6 +12,16 @@ import {
   shelfEligibleHaving,
 } from './book-device-aggregates.js';
 import { currentReadingBook } from './current-reading.js';
+
+export type BookRow = typeof book.$inferSelect;
+
+export async function getBookRow(
+  db: DbClient,
+  md5: string,
+): Promise<BookRow | null> {
+  const [b] = await db.select().from(book).where(eq(book.md5, md5)).limit(1);
+  return b ?? null;
+}
 
 export type ListBooksOptions = {
   showHidden: boolean;
@@ -111,7 +122,7 @@ export async function getBook(
   db: DbClient,
   md5: string,
 ): Promise<GetBookResult | null> {
-  const [b] = await db.select().from(book).where(eq(book.md5, md5)).limit(1);
+  const b = await getBookRow(db, md5);
   if (!b) return null;
   const devices = await db
     .select()
@@ -175,6 +186,9 @@ export async function updateBook(
   if (!existing) return { found: false };
 
   const patch: typeof rest & { completedAt?: number | null } = { ...rest };
+  if (rest.isbn !== undefined) {
+    patch.isbn = rest.isbn === null ? null : normalizeIsbnForStorage(rest.isbn);
+  }
   if (completedAtOverride !== undefined) {
     patch.completedAt = completedAtOverride;
   } else if (completed === true && existing.completedAt == null) {
@@ -184,8 +198,9 @@ export async function updateBook(
   }
 
   await db.update(book).set(patch).where(eq(book.md5, md5));
-  const isbnChanged = rest.isbn !== undefined && rest.isbn !== existing.isbn;
-  const nextIsbn = rest.isbn !== undefined ? rest.isbn : existing.isbn;
+  const nextIsbn =
+    rest.isbn !== undefined ? (patch.isbn ?? null) : existing.isbn;
+  const isbnChanged = rest.isbn !== undefined && nextIsbn !== existing.isbn;
   return {
     found: true,
     isbnChanged,
