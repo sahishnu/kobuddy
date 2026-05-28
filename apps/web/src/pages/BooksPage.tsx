@@ -33,7 +33,6 @@ export function BooksPage() {
     q: search || undefined,
     sort: 'lastOpen',
   });
-
   const rows = booksPage.data?.items ?? [];
   const total = booksPage.data?.total ?? 0;
   const pageSize = booksPage.data?.pageSize ?? BOOKS_LIST_PAGE_SIZE;

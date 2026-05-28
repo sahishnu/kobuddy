@@ -29,6 +29,19 @@ const readingGoalResponseSchema = {
   },
 } as const;
 
+const loadingQuoteSchema = {
+  type: 'object',
+  required: ['id', 'text', 'author', 'book', 'enabled', 'sortOrder'],
+  properties: {
+    id: { type: 'integer' },
+    text: { type: 'string' },
+    author: { type: 'string' },
+    book: { type: 'string' },
+    enabled: { type: 'boolean' },
+    sortOrder: { type: 'integer' },
+  },
+} as const;
+
 export const openApiDocument = {
   openapi: '3.1.0',
   info: {
@@ -252,6 +265,93 @@ export const openApiDocument = {
             },
           },
           '401': { description: 'Unauthorized' },
+        },
+      },
+    },
+    '/api/loading-quotes/random': {
+      get: {
+        tags: ['settings'],
+        summary: 'Random enabled loading quote (public read or admin)',
+        responses: {
+          '200': {
+            description: 'OK',
+            content: {
+              'application/json': { schema: loadingQuoteSchema },
+            },
+          },
+          '404': { description: 'No enabled quotes' },
+        },
+      },
+    },
+    '/api/loading-quotes': {
+      get: {
+        tags: ['settings'],
+        summary: 'List all loading quotes (admin)',
+        responses: {
+          '200': {
+            description: 'OK',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  required: ['items'],
+                  properties: {
+                    items: { type: 'array', items: loadingQuoteSchema },
+                  },
+                },
+              },
+            },
+          },
+          '401': { description: 'Unauthorized' },
+        },
+      },
+      post: {
+        tags: ['settings'],
+        summary: 'Create loading quote (admin)',
+        responses: {
+          '201': {
+            description: 'Created',
+            content: {
+              'application/json': { schema: loadingQuoteSchema },
+            },
+          },
+        },
+      },
+    },
+    '/api/loading-quotes/{id}': {
+      put: {
+        tags: ['settings'],
+        summary: 'Update loading quote (admin)',
+        parameters: [
+          {
+            name: 'id',
+            in: 'path',
+            required: true,
+            schema: { type: 'integer' },
+          },
+        ],
+        responses: {
+          '200': {
+            description: 'OK',
+            content: {
+              'application/json': { schema: loadingQuoteSchema },
+            },
+          },
+        },
+      },
+      delete: {
+        tags: ['settings'],
+        summary: 'Delete loading quote (admin)',
+        parameters: [
+          {
+            name: 'id',
+            in: 'path',
+            required: true,
+            schema: { type: 'integer' },
+          },
+        ],
+        responses: {
+          '200': { description: 'OK' },
         },
       },
     },

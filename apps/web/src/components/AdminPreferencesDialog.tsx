@@ -1,6 +1,7 @@
 import { Dialog } from '@base-ui/react/dialog';
 import { localCalendarYear } from '@kobuddy/common';
 import { useMemo } from 'react';
+import { AdminLoadingQuotesForm } from '@/components/AdminLoadingQuotesForm';
 import { AdminReadingGoalForm } from '@/components/AdminReadingGoalForm';
 import { buttonVariants } from '@/components/ui/button';
 import { DIALOG_BACKDROP_CLASS, DIALOG_POPUP_CLASS } from '@/lib/dialog-styles';
@@ -29,7 +30,7 @@ export function AdminPreferencesDialog({ open, onOpenChange }: Props) {
           <Dialog.Popup
             className={cn(
               DIALOG_POPUP_CLASS,
-              'z-[60] flex max-h-[min(85vh,560px)] w-full max-w-lg flex-col overflow-hidden',
+              'z-[60] flex max-h-[min(90vh,640px)] w-full max-w-lg flex-col overflow-hidden',
             )}
           >
             <div className="shrink-0 border-b border-border/60 px-5 py-4">
@@ -47,6 +48,12 @@ export function AdminPreferencesDialog({ open, onOpenChange }: Props) {
                   {goalYear} reading goal
                 </h2>
                 <AdminReadingGoalForm year={goalYear} />
+              </section>
+              <section className="space-y-3 border-t border-border/60 pt-6">
+                <h2 className="font-heading text-sm font-semibold tracking-tight">
+                  Splash quotes
+                </h2>
+                <AdminLoadingQuotesForm enabled={open} />
               </section>
             </div>
             <div className="shrink-0 border-t border-border/60 px-5 py-3">

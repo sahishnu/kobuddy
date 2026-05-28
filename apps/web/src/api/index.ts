@@ -22,5 +22,12 @@ export {
   uploadBookCover,
 } from './books.js';
 export { ApiError, apiJson } from './client.js';
+export {
+  createLoadingQuote,
+  deleteLoadingQuote,
+  fetchLoadingQuotes,
+  fetchRandomLoadingQuote,
+  updateLoadingQuote,
+} from './loading-quotes.js';
 export { fetchReadingGoal, setReadingGoal } from './reading-goals.js';
 export { fetchStatsOverview } from './stats.js';

@@ -109,6 +109,23 @@ export const readingGoal = sqliteTable('reading_goal', {
   books: integer('books').notNull(),
 });
 
+/** Fiction lines shown on the loading screen (admin-managed). */
+export const loadingQuote = sqliteTable(
+  'loading_quote',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    text: text('text').notNull(),
+    author: text('author').notNull(),
+    book: text('book').notNull(),
+    enabled: integer('enabled', { mode: 'boolean' }).notNull().default(true),
+    sortOrder: integer('sort_order').notNull().default(0),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' })
+      .notNull()
+      .$defaultFn(() => new Date()),
+  },
+  (t) => [index('loading_quote_enabled_idx').on(t.enabled)],
+);
+
 export const deviceRelations = relations(device, ({ many }) => ({
   bookDevices: many(bookDevice),
   pageStats: many(pageStat),
@@ -150,3 +167,4 @@ export type Book = typeof book.$inferSelect;
 export type BookDevice = typeof bookDevice.$inferSelect;
 export type PageStat = typeof pageStat.$inferSelect;
 export type ReadingGoal = typeof readingGoal.$inferSelect;
+export type LoadingQuote = typeof loadingQuote.$inferSelect;

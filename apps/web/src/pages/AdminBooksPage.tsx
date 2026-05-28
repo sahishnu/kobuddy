@@ -59,7 +59,6 @@ export function AdminBooksPage() {
     page,
     q: search || undefined,
   });
-
   const hiddenBooksPage = useAdminBooksPage(isAdmin && hiddenListOpen, {
     page: hiddenPage,
     hiddenOnly: true,

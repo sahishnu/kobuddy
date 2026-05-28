@@ -17,6 +17,7 @@
     "db:generate": "pnpm --filter @kobuddy/db exec drizzle-kit generate",
     "db:studio": "pnpm --filter @kobuddy/db exec drizzle-kit studio",
     "seed:dev": "pnpm --filter @kobuddy/server run seed:dev",
+    "seed:loading-quotes": "pnpm --filter @kobuddy/server run seed:loading-quotes",
     "prepare": "husky"
   },
   "devDependencies": {

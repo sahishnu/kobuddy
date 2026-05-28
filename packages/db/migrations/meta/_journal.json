@@ -36,6 +36,13 @@
       "when": 1779942469756,
       "tag": "0004_dear_stature",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1779943634054,
+      "tag": "0005_loading_quotes",
+      "breakpoints": true
     }
   ]
 }
