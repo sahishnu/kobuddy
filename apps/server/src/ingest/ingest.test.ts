@@ -105,6 +105,21 @@ describe('ingestFromJson — bad-row filter', () => {
   });
 });
 
+describe('ingestFromJson — large batches', () => {
+  it('imports more page stats than fit in a single SQLite statement (999 bound params)', () => {
+    const db = createInMemoryDb();
+    const books = [book('bk1')];
+    const stats: PageStatPayload[] = Array.from({ length: 6284 }, (_, i) =>
+      stat({ page: i, start_time: 1_700_000_000 + i }),
+    );
+    const r = ingestFromJson(db, books, stats);
+    expect(r.pageStatsImported).toBe(6284);
+    expect(r.pageStatsFiltered).toBe(0);
+    const rows = db.select().from(pageStat).all();
+    expect(rows).toHaveLength(6284);
+  });
+});
+
 describe('ingestFromJson — device selection', () => {
   it('uses first non-empty device_id among safe stats', () => {
     const db = createInMemoryDb();

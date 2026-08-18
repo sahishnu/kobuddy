@@ -12,6 +12,17 @@ export type IngestResult = {
   pageStatsFiltered: number;
 };
 
+/** better-sqlite3 rejects statements with more than 999 bound parameters. */
+const SQLITE_MAX_BIND_PARAMS = 999;
+
+function chunk<T>(items: T[], size: number): T[][] {
+  const chunks: T[][] = [];
+  for (let i = 0; i < items.length; i += size) {
+    chunks.push(items.slice(i, i + size));
+  }
+  return chunks;
+}
+
 function filterSafePageStats(
   newPageStats: PageStatPayload[],
 ): PageStatPayload[] {
@@ -101,21 +112,29 @@ export function ingestFromJson(
         totalPages: s.total_pages,
       }));
 
-      tx.insert(pageStat)
-        .values(rows)
-        .onConflictDoUpdate({
-          target: [
-            pageStat.deviceId,
-            pageStat.bookMd5,
-            pageStat.page,
-            pageStat.startTime,
-          ],
-          set: {
-            duration: sql`excluded.duration`,
-            totalPages: sql`excluded.total_pages`,
-          },
-        })
-        .run();
+      // Chunk to stay under SQLITE_MAX_BIND_PARAMS regardless of column count —
+      // a single big VALUES insert overflows it once a backlog builds up
+      // (e.g. a device that hasn't synced in months).
+      const columnsPerRow = Object.keys(rows[0]).length;
+      const batchSize = Math.floor(SQLITE_MAX_BIND_PARAMS / columnsPerRow);
+
+      for (const batch of chunk(rows, batchSize)) {
+        tx.insert(pageStat)
+          .values(batch)
+          .onConflictDoUpdate({
+            target: [
+              pageStat.deviceId,
+              pageStat.bookMd5,
+              pageStat.page,
+              pageStat.startTime,
+            ],
+            set: {
+              duration: sql`excluded.duration`,
+              totalPages: sql`excluded.total_pages`,
+            },
+          })
+          .run();
+      }
     }
   });
 
